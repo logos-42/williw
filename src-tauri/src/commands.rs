@@ -486,6 +486,95 @@ pub async fn check_node_health_from_workers(
     }
 }
 
+/// Upload full node info (iroh + device) to workers backend manually
+#[tauri::command]
+pub async fn upload_full_node_info_to_workers(
+    state: State<'_, AppState>
+) -> Result<serde_json::Value, String> {
+    // Get device info
+    let device_info = state.device_info.lock().clone()
+        .ok_or_else(|| "No device info available".to_string())?;
+    
+    // Get iroh node info if available
+    let iroh_node = {
+        let node_guard = state.node.lock();
+        if let Some(node) = node_guard.as_ref() {
+            let node_id = node.comms.node_id().to_string();
+            let capabilities = node.device_manager.get();
+            let stats = node.stats.lock().unwrap();
+            let (primary_peers, backup_peers) = node.topology.neighbor_sets();
+            
+            // Build peers list
+            let mut peers = Vec::new();
+            for peer_id in primary_peers {
+                if let Some(snapshot) = node.topology.peer_snapshot(&peer_id) {
+                    peers.push(crate::api_client::IrohPeerInfo {
+                        id: peer_id.to_string(),
+                        peer_type: "primary".to_string(),
+                        similarity: snapshot.similarity,
+                        geo_affinity: snapshot.geo_affinity,
+                        embedding_dim: snapshot.embedding_dim,
+                        position: crate::api_client::GeoPosition {
+                            lat: snapshot.position.lat,
+                            lon: snapshot.position.lon,
+                        },
+                    });
+                }
+            }
+            for peer_id in backup_peers {
+                if let Some(snapshot) = node.topology.peer_snapshot(&peer_id) {
+                    peers.push(crate::api_client::IrohPeerInfo {
+                        id: peer_id.to_string(),
+                        peer_type: "backup".to_string(),
+                        similarity: snapshot.similarity,
+                        geo_affinity: snapshot.geo_affinity,
+                        embedding_dim: snapshot.embedding_dim,
+                        position: crate::api_client::GeoPosition {
+                            lat: snapshot.position.lat,
+                            lon: snapshot.position.lon,
+                        },
+                    });
+                }
+            }
+            
+            Some(crate::api_client::IrohNodeInfo {
+                node_id,
+                is_running: true,
+                tick_counter: node.tick_counter,
+                device_capabilities: crate::api_client::IrohDeviceCapabilities {
+                    max_memory_mb: capabilities.max_memory_mb,
+                    cpu_cores: capabilities.cpu_cores,
+                    has_gpu: capabilities.has_gpu,
+                    network_type: capabilities.network_type.clone(),
+                    battery_level: capabilities.battery_level,
+                    is_charging: capabilities.is_charging,
+                },
+                training_stats: crate::api_client::IrohTrainingStats {
+                    total_ticks: stats.get_stats().tick_count,
+                    accuracy: stats.get_stats().training_accuracy,
+                    loss: stats.get_stats().training_loss,
+                    samples_processed: stats.get_stats().samples_processed,
+                },
+                peers,
+            })
+        } else {
+            None
+        }
+    };
+    
+    // Upload to workers
+    match state.api_client.upload_full_node_info(device_info, iroh_node).await {
+        Ok(response) => {
+            Ok(serde_json::json!({
+                "success": response.success,
+                "message": response.message,
+                "data": response.data
+            }))
+        }
+        Err(e) => Err(format!("Upload failed: {}", e)),
+    }
+}
+
 /// Start GPU inference server
 #[tauri::command]
 pub async fn start_gpu_server() -> Result<String, String> {

@@ -14,6 +14,7 @@ pub struct WorkersApiClient {
 pub struct DeviceInfoPayload {
     pub device_id: String,
     pub timestamp: String,
+    pub node_id: String,  // 后端要求必填
     pub device_info: DeviceInfo,
     pub metadata: DeviceMetadata,
 }
@@ -163,6 +164,66 @@ pub struct ApiResponse {
     pub data: Option<serde_json::Value>,
 }
 
+/// Iroh节点信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohNodeInfo {
+    pub node_id: String,
+    pub is_running: bool,
+    pub tick_counter: u64,
+    pub device_capabilities: IrohDeviceCapabilities,
+    pub training_stats: IrohTrainingStats,
+    pub peers: Vec<IrohPeerInfo>,
+}
+
+/// Iroh设备能力
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohDeviceCapabilities {
+    pub max_memory_mb: u64,
+    pub cpu_cores: u32,
+    pub has_gpu: bool,
+    pub network_type: String,
+    pub battery_level: Option<f32>,
+    pub is_charging: Option<bool>,
+}
+
+/// Iroh训练统计
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohTrainingStats {
+    pub total_ticks: u64,
+    pub accuracy: f64,
+    pub loss: f64,
+    pub samples_processed: u64,
+}
+
+/// Iroh对等节点信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohPeerInfo {
+    pub id: String,
+    pub peer_type: String, // "primary" or "backup"
+    pub similarity: f64,
+    pub geo_affinity: f64,
+    pub embedding_dim: usize,
+    pub position: GeoPosition,
+}
+
+/// 地理位置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoPosition {
+    pub lat: f64,
+    pub lon: f64,
+}
+
+/// 完整节点信息上传数据结构（包含iroh和设备信息）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullNodeInfoPayload {
+    pub device_id: String,
+    pub node_id: String,
+    pub timestamp: String,
+    pub iroh_node: Option<IrohNodeInfo>,
+    pub device_info: DeviceInfo,
+    pub metadata: DeviceMetadata,
+}
+
 impl WorkersApiClient {
     /// 创建新的API客户端
     pub fn new(base_url: String) -> Self {
@@ -179,9 +240,11 @@ impl WorkersApiClient {
 
     /// 上传设备信息和节点状态到 /api/node-info 端点
     pub async fn upload_node_info_from_device(&self, device_info: DeviceInfo) -> Result<ApiResponse> {
+        let device_id = self.get_device_id();
         let payload = DeviceInfoPayload {
-            device_id: self.get_device_id(),
+            device_id: device_id.clone(),
             timestamp: chrono::Utc::now().to_rfc3339(),
+            node_id: device_id,  // 后端要求必填，使用device_id作为node_id
             device_info,
             metadata: self.get_device_metadata(),
         };
@@ -363,6 +426,33 @@ impl WorkersApiClient {
 
         let health_response: NodeHealthResponse = response.json().await?;
         Ok(health_response)
+    }
+
+    /// 上传完整节点信息（包含iroh和设备信息）到 /api/node-info 端点
+    pub async fn upload_full_node_info(
+        &self,
+        device_info: DeviceInfo,
+        iroh_node: Option<IrohNodeInfo>,
+    ) -> Result<ApiResponse> {
+        let device_id = self.get_device_id();
+        let payload = FullNodeInfoPayload {
+            device_id: device_id.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            node_id: device_id,
+            iroh_node,
+            device_info,
+            metadata: self.get_device_metadata(),
+        };
+
+        let response = self
+            .client
+            .post(&format!("{}/api/node-info", self.base_url))
+            .json(&payload)
+            .send()
+            .await?;
+
+        let api_response: ApiResponse = response.json().await?;
+        Ok(api_response)
     }
 
     /// 测试连接

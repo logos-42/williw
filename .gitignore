@@ -88,5 +88,71 @@ out/
 tmp/
 temp/
 
-
+# Large model files and datasets
 test_models/
+test_models/
+torch_env/
+*.pkl
+*.h5
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# Large build artifacts and caches
+target/
+**/target/
+**/.rustc_info.json
+**/*.timestamp
+**/*.flat
+**/*.rlib
+**/*.rmeta
+**/*.d
+
+# Large node_modules
+node_modules/
+
+# Large Android build artifacts
+android_lib_full/
+**/gen/android/
+**/gen/ios/
+
+# Python virtual environments and caches
+.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE and editor caches
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS generated files
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test outputs and logs
+test_output/
+*.log
+logs/
+
+# Large downloaded files
+received_files/
+downloads/
+
+# Temporary and backup files
+*.bak
+*.backup
+*~

@@ -77,8 +77,11 @@ impl ModelSplitter {
             .unwrap_or_else(|| PathBuf::from("./model_shards").join(node_id));
         tokio::fs::create_dir_all(&output_dir).await?;
         
-        // 构建 Python 命令
-        let output = tokio::process::Command::new("python3")
+        // 构建 Python 命令 - 优先使用 Python 3.12
+        let python_cmd = std::env::var("PYTHON_PATH")
+            .unwrap_or_else(|_| "C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe".to_string());
+
+        let output = tokio::process::Command::new(&python_cmd)
             .arg(&script_path)
             .arg("--model-name")
             .arg(&config.model_name)
@@ -92,7 +95,7 @@ impl ModelSplitter {
             .arg(node_id)
             .output()
             .await
-            .context("Failed to execute Python script")?;
+            .with_context(|| format!("Failed to execute Python script: {}", python_cmd))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

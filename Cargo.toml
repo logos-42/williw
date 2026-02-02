@@ -31,10 +31,10 @@ cipher = "0.4"
 subtle = "2.5"
 
 # Rust modules for model processing
-model-downloader = { path = "src/rust_modules/model_downloader" }
-metadata-generator = { path = "src/rust_modules/metadata_generator" }
-metadata-uploader = { path = "src/rust_modules/metadata_uploader" }
-model-splitter = { path = "src/rust_modules/model_splitter" }
+model-downloader = { path = "src/models/model_downloader" }
+metadata-generator = { path = "src/models/metadata_generator" }
+metadata-uploader = { path = "src/models/metadata_uploader" }
+model-splitter = { path = "src/models/model_splitter" }
 
 # HTTP client for model operations
 reqwest = { version = "0.13.1", features = ["json"] }

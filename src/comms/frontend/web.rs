@@ -3,11 +3,8 @@
  * 提供 WebAssembly 接口用于前端与 Rust 后端交互
  */
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tokio::sync::RwLock;
 use anyhow::Result;
+use std::sync::Arc;
 
 use crate::comms::frontend::manager::{P2PFrontendManager, P2PNodeInfo, P2PConnectionStats};
 

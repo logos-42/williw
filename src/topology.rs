@@ -53,6 +53,8 @@ pub struct PeerSnapshot {
     pub geo_affinity: f32,
     pub position: GeoPoint,
     pub embedding_dim: usize,
+    pub network_affinity: f32,  // 添加网络亲和度到快照
+    pub network_distance: NetworkDistance,  // 添加网络距离到快照
 }
 
 impl TopologySelector {
@@ -159,6 +161,8 @@ impl TopologySelector {
             geo_affinity: profile.geo_affinity,
             position: profile.position.clone(),
             embedding_dim: profile.embedding.len(),
+            network_affinity: profile.network_affinity,
+            network_distance: profile.network_distance.clone(),
         })
     }
 
@@ -185,10 +189,40 @@ impl TopologySelector {
         peers.get(peer_id).map(|profile| profile.network_affinity)
     }
 
+    /// 获取拓扑统计信息
+    pub fn get_topology_stats(&self) -> TopologyStats {
+        let peers = self.peers.read();
+        let (primary, backup) = self.neighbor_sets();
+
+        let avg_similarity = peers.values().map(|p| p.similarity).sum::<f32>() / peers.len() as f32;
+        let avg_geo_affinity = peers.values().map(|p| p.geo_affinity).sum::<f32>() / peers.len() as f32;
+        let avg_network_affinity = peers.values().map(|p| p.network_affinity).sum::<f32>() / peers.len() as f32;
+
+        TopologyStats {
+            total_peers: peers.len(),
+            primary_neighbors: primary.len(),
+            backup_neighbors: backup.len(),
+            avg_similarity,
+            avg_geo_affinity,
+            avg_network_affinity,
+        }
+    }
+
     fn cleanup_locked(&self, peers: &mut HashMap<String, PeerProfile>) {
         let deadline = Instant::now() - Duration::from_secs(self.config.peer_stale_secs);
         peers.retain(|_, profile| profile.last_seen >= deadline);
     }
+}
+
+/// 拓扑统计信息
+#[derive(Debug, Clone)]
+pub struct TopologyStats {
+    pub total_peers: usize,
+    pub primary_neighbors: usize,
+    pub backup_neighbors: usize,
+    pub avg_similarity: f32,
+    pub avg_geo_affinity: f32,
+    pub avg_network_affinity: f32,
 }
 
 fn cosine_sim(a: &[f32], b: &[f32]) -> f32 {

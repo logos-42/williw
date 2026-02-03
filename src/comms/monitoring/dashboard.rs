@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use chrono::{DateTime, Utc};
-use tracing::{info, warn, error};
+use tracing::{info, error};
 
 use crate::comms::p2p::{TransferEvent, P2PModelDistributor, get_global_receiver};
 

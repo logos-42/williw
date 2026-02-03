@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{info, warn, error, debug};
+use tracing::{info, debug};
 
 /// P2P 节点信息
 #[derive(Debug, Clone, Serialize, Deserialize)]

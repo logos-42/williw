@@ -3,10 +3,9 @@
  * 负责接收其他节点发送的模型分片
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
-use serde_json;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio;
 use tracing::{info, warn, error};

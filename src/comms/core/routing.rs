@@ -6,7 +6,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 use parking_lot::RwLock;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 /// 路由类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

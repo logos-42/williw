@@ -9,7 +9,7 @@ use crate::crypto::{EncryptionAlgorithm, HighPerformanceCrypto, HighPerformanceC
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use aes::Aes256;
-use cbc::{Decryptor, Encryptor};
+use cbc::Decryptor;
 use block_padding::Pkcs7;
 use blake3::Hasher;
 use aes::cipher::KeyIvInit;

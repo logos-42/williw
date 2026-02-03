@@ -3,8 +3,8 @@
 //! 提供基础的签名、验证功能，用于与 Solana 区块链和智能合约交互。
 
 use anyhow::{anyhow, Result};
-use ed25519_dalek::{SigningKey as SolKeypair, VerifyingKey as SolPublicKey,
-    Signature as SolRawSignature, Signer as SolSigner, Verifier as SolVerifier};
+use ed25519_dalek::{SigningKey as SolKeypair,
+    Signature as SolRawSignature, Signer as SolSigner};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;

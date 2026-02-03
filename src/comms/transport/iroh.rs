@@ -3,7 +3,7 @@
  * 统一的iroh集成，包含Gossip消息和P2P文件传输
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use iroh::{Endpoint, endpoint::Connection, EndpointAddr, PublicKey};
 use iroh::endpoint_info::EndpointIdExt;
 use parking_lot::RwLock;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, warn, error, debug};
 use serde::{Serialize, Deserialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 // 兼容原有的Gossip功能
 use crate::consensus::SignedGossip;

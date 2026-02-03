@@ -3,7 +3,7 @@
  * 展示如何在桌面应用启动时自动初始化 P2P 服务
  */
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use std::time::Duration;
 use tokio;
 use tracing::{info, warn, error};

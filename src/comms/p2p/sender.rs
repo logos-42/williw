@@ -3,16 +3,15 @@
  * 负责将本地模型分片发送到其他节点
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
-use serde_json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio;
 use tracing::{info, warn, error};
 use tracing_subscriber;
 
-use crate::comms::p2p::distributor::{P2PModelDistributor, FileTransferMessage};
+use crate::comms::p2p::distributor::P2PModelDistributor;
 
 /// P2P 模型分发发送端
 #[derive(Parser)]

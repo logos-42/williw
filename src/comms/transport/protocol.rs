@@ -3,13 +3,13 @@
  * 提供安全的文件传输和验证功能
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{info, warn, error, debug};
+use tracing::{info, error};
 
 /// 文件完整性信息
 #[derive(Debug, Clone, Serialize, Deserialize)]

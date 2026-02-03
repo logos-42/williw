@@ -10,14 +10,14 @@
 // 导出子模块
 pub mod base;
 pub mod high_performance;
-pub mod batch;
+// pub mod batch;
 pub mod hardware;
 pub mod zero_copy;
 
 // 重新导出常用类型
 pub use base::*;
 pub use high_performance::*;
-pub use batch::*;
+// pub use batch::*;
 pub use hardware::*;
 pub use zero_copy::*;
 

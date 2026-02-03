@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{info, warn, error};
 
-use crate::comms::frontend::manager::{P2PFrontendManager, P2PNodeInfo, P2PConnectionStats};
+use crate::comms::frontend::manager::P2PFrontendManager;
 
 /// P2P 前端启动器
 pub struct P2PFrontendStarter {
@@ -128,7 +128,7 @@ impl P2PFrontendStarter {
             // 等待一段时间后添加引导节点
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             
-            let mut guard = manager.lock().await;
+            let guard = manager.lock().await;
             if let Some(ref manager) = *guard {
                 // 添加模拟的引导节点
                 let bootstrap_nodes = vec![
@@ -154,7 +154,7 @@ impl P2PFrontendStarter {
             loop {
                 interval.tick().await;
                 
-                let mut guard = manager.lock().await;
+                let guard = manager.lock().await;
                 if let Some(ref manager) = *guard {
                     // 检查连接状态
                     if let Ok(nodes) = manager.get_connected_nodes().await {

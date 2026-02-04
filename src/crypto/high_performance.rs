@@ -260,7 +260,7 @@ impl HighPerformanceCrypto {
         }
     }
     
-    fn update_performance_stats(&self, duration: Duration, data_size: usize) {
+    fn update_performance_stats(&self, duration: Duration, _data_size: usize) {
         let nanos = duration.as_nanos() as u64;
         self.performance_stats.fetch_add(nanos, Ordering::Relaxed);
         self.encryption_counter.fetch_add(1, Ordering::Relaxed);

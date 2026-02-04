@@ -6,10 +6,10 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 use parking_lot::RwLock;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::config::PrivacyPerformanceConfig;
-use super::quality::{ConnectionQuality, NetworkConditions};
+use super::quality::ConnectionQuality;
 
 /// 路径类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -845,7 +845,7 @@ impl PathManager {
     }
     
     /// 更新路径质量
-    pub fn update_path_quality(&self, path_id: &str, quality: ConnectionQuality) {
+    pub fn update_path_quality(&self, _path_id: &str, quality: ConnectionQuality) {
         // 在实际实现中，这里会更新对应路径的质量信息
         // 目前先记录到质量分析器
         self.quality_analyzer.update_quality(quality);

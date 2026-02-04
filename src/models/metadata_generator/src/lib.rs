@@ -113,7 +113,7 @@ impl MetadataGenerator {
     /// 估算单层算力需求（Rust 实现，用于验证）
     pub fn estimate_layer_compute(
         &self,
-        layer_name: &str,
+        _layer_name: &str,
         num_params: usize,
         layer_type: &str,
         batch_size: usize,
@@ -139,6 +139,13 @@ impl MetadataGenerator {
             .unwrap_or(2.0);
 
         let mut layer_compute = num_params as f64 * cost_per_param * batch_size as f64;
+
+        // 根据层名称调整计算成本
+        if _layer_name.contains("attn") || _layer_name.contains("attention") {
+            layer_compute *= 1.2; // 注意力层通常更昂贵
+        } else if _layer_name.contains("norm") {
+            layer_compute *= 0.8; // 归一化层相对便宜
+        }
 
         if model_type == "transformer" {
             layer_compute *= sequence_length as f64 / 512.0;

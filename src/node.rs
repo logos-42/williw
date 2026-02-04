@@ -1,15 +1,14 @@
 use crate::comms::{CommsHandle, IrohEvent};
 use crate::config::AppConfig;
 use crate::consensus::{ConsensusEngine, SignedGossip};
-use crate::crypto::CryptoConfig;
 use crate::device::DeviceManager;
 use crate::stats::TrainingStatsManager;
 use crate::topology::TopologySelector;
 use crate::training::TrainingEngine;
 use crate::types::{GeoPoint, GgbMessage};
 use anyhow::Result;
-use futures::StreamExt;
-use rand::{Rng, SeedableRng};
+
+use rand::SeedableRng;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::time::{interval, Duration};
@@ -364,11 +363,11 @@ impl Node {
                     }
                 }
             }
-            GgbMessage::SparseUpdate { sender, update } => {
+            GgbMessage::SparseUpdate { update, .. } => {
                 // self.stats.record_sparse_update_received(sender);
                 self.training.apply_sparse_update(update);
             }
-            GgbMessage::DenseSnapshot { sender, snapshot } => {
+            GgbMessage::DenseSnapshot { snapshot, .. } => {
                 // self.stats.record_dense_snapshot_received(sender);
                 self.training.apply_dense_snapshot(snapshot);
             }

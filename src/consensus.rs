@@ -116,7 +116,7 @@ impl ConsensusEngine {
         })
     }
 
-    pub fn verify(&self, msg: &SignedGossip) -> bool {
+    pub fn verify(&self, _msg: &SignedGossip) -> bool {
         // return self.crypto.verify(&bytes, &msg.signature);
         // Temporary mock: always return true for verification
         true

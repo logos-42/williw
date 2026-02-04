@@ -157,7 +157,7 @@ impl ZeroCopyEncryption {
         }
     }
     
-    fn encrypt_blake3_in_place(&self, data: &mut [u8], key: &[u8]) -> Result<()> {
+    fn encrypt_blake3_in_place(&self, _data: &mut [u8], _key: &[u8]) -> Result<()> {
         // Blake3加密实际上是在末尾添加哈希
         // 由于是原地操作，我们需要扩展缓冲区
         // 这里我们返回错误，因为原地操作不适合这种加密

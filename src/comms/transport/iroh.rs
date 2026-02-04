@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{info, warn, error, debug};
 use serde::{Serialize, Deserialize};
-use tokio::io::AsyncReadExt;
 
 // 兼容原有的Gossip功能
 use crate::consensus::SignedGossip;
@@ -93,7 +92,7 @@ impl IrohConnectionManager {
         // 尝试从z-base-32格式解析PublicKey
         let public_key = match PublicKey::from_z32(peer_addr) {
             Ok(key) => key,
-            Err(e) => {
+            Err(_e) => {
                 // 如果z-base-32解析失败，尝试标准FromStr
                 match peer_addr.parse::<PublicKey>() {
                     Ok(key) => key,
@@ -118,7 +117,7 @@ impl IrohConnectionManager {
             }
             Err(e) => {
                 error!("连接失败: {}", e);
-                Err(anyhow!("无法连接到节点 {}: {}", peer_addr, e))
+                Err(anyhow!("无法连接到节点 {}", peer_addr))
             }
         }
     }
@@ -151,7 +150,7 @@ impl IrohConnectionManager {
         send_stream.write_all(message).await?;
         
         // 关闭流
-        send_stream.finish();
+        let _ = send_stream.finish();
         
         Ok(())
     }
@@ -274,7 +273,7 @@ impl IrohConnectionManager {
         info!("🔌 断开与节点 {} 的连接", peer_id);
         
         let mut connections = self.connections.lock().await;
-        if let Some(_connection) = connections.remove(peer_id) {
+        if connections.remove(peer_id).is_some() {
             info!("✅ 已断开与节点 {} 的连接", peer_id);
             Ok(())
         } else {

@@ -163,34 +163,34 @@ impl P2PModelReceiver {
     }
 
     /// 处理接收到的消息
-    async fn handle_message(&mut self, sender_id: String, message: FileTransferMessage) -> Result<()> {
+    async fn handle_message(&mut self, _sender_id: String, message: FileTransferMessage) -> Result<()> {
         match message {
-            FileTransferMessage::FileRequest { 
-                file_id, 
-                file_name, 
-                file_size, 
-                chunk_size, 
-                file_hash 
+            FileTransferMessage::FileRequest {
+                file_id,
+                file_name,
+                file_size,
+                chunk_size,
+                file_hash
             } => {
-                self.handle_file_request(sender_id, file_id, file_name, file_size, chunk_size, file_hash).await?;
+                self.handle_file_request(_sender_id, file_id, file_name, file_size, chunk_size, file_hash).await?;
             }
-            FileTransferMessage::FileChunk { 
-                file_id, 
-                chunk_index, 
-                data, 
-                chunk_hash 
+            FileTransferMessage::FileChunk {
+                file_id,
+                chunk_index,
+                data,
+                chunk_hash
             } => {
-                self.handle_file_chunk(sender_id, file_id, chunk_index, data, chunk_hash).await?;
+                self.handle_file_chunk(_sender_id, file_id, chunk_index, data, chunk_hash).await?;
             }
-            FileTransferMessage::FileComplete { 
-                file_id, 
-                total_chunks, 
-                final_hash 
+            FileTransferMessage::FileComplete {
+                file_id,
+                total_chunks,
+                final_hash
             } => {
-                self.handle_file_complete(sender_id, file_id, total_chunks, final_hash).await?;
+                self.handle_file_complete(_sender_id, file_id, total_chunks, final_hash).await?;
             }
             FileTransferMessage::TransferError { file_id, error } => {
-                self.handle_transfer_error(sender_id, file_id, error).await?;
+                self.handle_transfer_error(_sender_id, file_id, error).await?;
             }
             _ => {
                 warn!("⚠️  收到未知类型的消息");
@@ -201,7 +201,7 @@ impl P2PModelReceiver {
     }
 
     /// 处理文件传输请求
-    async fn handle_file_request(&mut self, 
+    async fn handle_file_request(&mut self,
                                  sender_id: String,
                                  file_id: String,
                                  file_name: String,
@@ -232,7 +232,7 @@ impl P2PModelReceiver {
 
     /// 接受文件传输
     async fn accept_transfer(&mut self,
-                             sender_id: String,
+                             _sender_id: String,
                              file_id: String,
                              file_name: String,
                              file_size: u64,
@@ -251,24 +251,24 @@ impl P2PModelReceiver {
 
         // 开始接收文件
         let transfer_id = self.distributor.receive_file(&self.args.output_dir, file_request).await?;
-        
+
         info!("🔄 开始接收文件，传输ID: {}", transfer_id);
 
         // 发送接受响应
-        let response = FileTransferMessage::FileResponse {
+        let _response = FileTransferMessage::FileResponse {
             file_id: transfer_id.clone(),
             accepted: true,
             reason: None,
         };
 
-        self.send_message(&sender_id, response).await?;
+        self.send_message(&_sender_id, _response).await?;
 
         Ok(())
     }
 
     /// 处理文件块
     async fn handle_file_chunk(&mut self,
-                               sender_id: String,
+                               _sender_id: String,
                                file_id: String,
                                chunk_index: u32,
                                data: Vec<u8>,
@@ -280,14 +280,14 @@ impl P2PModelReceiver {
             chunk_hash,
         };
 
-        self.distributor.handle_file_chunk(sender_id, chunk_message).await?;
+        self.distributor.handle_file_chunk(_sender_id, chunk_message).await?;
 
         // 检查传输进度
         if let Some(status) = self.distributor.get_transfer_status(&file_id).await {
             match status {
-                crate::comms::p2p_distributor::TransferStatus::InProgress { 
-                    chunks_received, 
-                    total_chunks 
+                crate::comms::p2p_distributor::TransferStatus::InProgress {
+                    chunks_received,
+                    total_chunks
                 } => {
                     let progress = (chunks_received as f32 / total_chunks as f32) * 100.0;
                     info!("📊 文件 {} 接收进度: {:.1}%", file_id, progress);
@@ -305,7 +305,7 @@ impl P2PModelReceiver {
 
     /// 处理文件传输完成
     async fn handle_file_complete(&mut self,
-                                  sender_id: String,
+                                  _sender_id: String,
                                   file_id: String,
                                   total_chunks: u32,
                                   final_hash: String) -> Result<()> {
@@ -336,7 +336,7 @@ impl P2PModelReceiver {
             final_hash,
         };
 
-        self.send_message(&sender_id, ack_message).await?;
+        self.send_message(&_sender_id, ack_message).await?;
 
         self.print_stats();
 
@@ -345,25 +345,24 @@ impl P2PModelReceiver {
 
     /// 处理传输错误
     async fn handle_transfer_error(&mut self,
-                                    sender_id: String,
+                                    _sender_id: String,
                                     file_id: String,
                                     error: String) -> Result<()> {
         self.stats.failed_transfers += 1;
         error!("❌ 传输失败: {} - {}", file_id, error);
-        
+
         // 可以选择发送错误确认
         Ok(())
     }
 
     /// 发送消息（模拟实现）
-    async fn send_message(&mut self, peer_id: &str, message: FileTransferMessage) -> Result<()> {
+    async fn send_message(&mut self, _peer_id: &str, _message: FileTransferMessage) -> Result<()> {
         // 这里应该通过 iroh 发送实际消息
-        let _ = (peer_id, message);
         Ok(())
     }
 
     /// 获取传输会话
-    async fn get_transfer_session(&self, file_id: &str) -> Option<crate::comms::p2p_distributor::TransferSession> {
+    async fn get_transfer_session(&self, _file_id: &str) -> Option<crate::comms::p2p_distributor::TransferSession> {
         // 这里需要访问 distributor 的内部状态
         // 暂时返回 None
         None
@@ -395,24 +394,24 @@ impl P2PModelReceiver {
 pub async fn run_receiver(args: P2PReceiverArgs) -> Result<()> {
     // 初始化日志
     tracing_subscriber::fmt::init();
-    
-    let mut receiver = P2PModelReceiver::new(args);
-    
+
+    let receiver = P2PModelReceiver::new(args);
+
     // 设置 Ctrl+C 处理
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    
+
     let receiver_arc = Arc::new(Mutex::new(receiver));
     let receiver_clone = receiver_arc.clone();
-    
+
     tokio::spawn(async move {
         tokio::signal::ctrl_c().await.unwrap();
         let mut receiver = receiver_clone.lock().await;
         receiver.stop().await;
     });
-    
+
     let mut receiver = receiver_arc.lock().await;
-    
+
     receiver.start().await
 }
 

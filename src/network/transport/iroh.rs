@@ -16,7 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::{RouteInfo, TransportStats};
+use super::TransportStats;
+
 
 /// Iroh传输配置
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -178,3 +178,4 @@ mod tests {
         assert!(result.is_ok());
     }
 }
+

@@ -279,8 +279,8 @@ impl CommsHandle {
     }
 
     pub async fn broadcast_realtime(&self, signed: &SignedGossip) -> bool {
-        if let Some(quic) = &self.quic {
-            return quic.broadcast(signed).await;
+        if let Some(_quic) = &self.quic {
+            return _quic.broadcast(signed).await;
         }
         false
     }
@@ -307,8 +307,8 @@ impl CommsHandle {
 
     /// 测量到指定节点的网络距离
     pub async fn measure_network_distance(&self, _node_addr: &String) -> crate::types::NetworkDistance {
-        if let Some(quic) = &self.quic {
-            // quic.measure_network_distance(node_addr).await  // 暂时返回默认值，因为API可能不匹配
+        if let Some(_quic) = &self.quic {
+            // _quic.measure_network_distance(node_addr).await  // 暂时返回默认值，因为API可能不匹配
             crate::types::NetworkDistance::new()
         } else {
             crate::types::NetworkDistance::new()

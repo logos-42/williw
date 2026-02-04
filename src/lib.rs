@@ -58,6 +58,9 @@ pub use node::Node;
 #[cfg(feature = "android")]
 pub use android::*;
 
+// Agent 模块
+pub mod agent;
+
 // 类型别名
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 

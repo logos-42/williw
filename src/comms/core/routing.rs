@@ -338,14 +338,14 @@ impl SmartRoutingEngine {
     }
 
     /// 更新性能监控
-    pub fn update_performance(&self, latency: f32, bandwidth: f32, packet_loss: f32) {
+    pub fn update_performance(&self, _latency: f32, _bandwidth: f32, _packet_loss: f32) {
         // 这里需要获取可变引用，所以需要内部可变性
         // 在实际实现中，可能需要使用Mutex或修改PerformanceMonitor为内部可变
         // 暂时留空，后续实现
     }
 
     /// 更新隐私分析
-    pub fn update_privacy_analysis(&self, ip_exposed: bool, resistance: f32) {
+    pub fn update_privacy_analysis(&self, _ip_exposed: bool, _resistance: f32) {
         // 同上，需要内部可变性
         // 暂时留空，后续实现
     }

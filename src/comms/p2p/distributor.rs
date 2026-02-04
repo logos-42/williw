@@ -280,14 +280,14 @@ impl P2PModelDistributor {
             }
 
             // 发送接受响应
-            let response = FileTransferMessage::FileResponse {
+            let _response = FileTransferMessage::FileResponse {
                 file_id: file_id.clone(),
                 accepted: true,
                 reason: None,
             };
 
             // 这里需要知道发送方ID，简化处理
-            // self.send_message(&sender_id, response).await;
+            // self.send_message(&sender_id, _response).await;
 
             Ok(file_id)
         } else {
@@ -296,8 +296,8 @@ impl P2PModelDistributor {
     }
 
     /// 处理接收到的文件块
-    pub async fn handle_file_chunk(&mut self, 
-                                   sender_id: String,
+    pub async fn handle_file_chunk(&mut self,
+                                   _sender_id: String,
                                    chunk_message: FileTransferMessage) -> Result<()> {
         if let FileTransferMessage::FileChunk {
             file_id,

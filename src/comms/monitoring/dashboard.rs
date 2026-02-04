@@ -134,15 +134,15 @@ impl MonitoringDashboard {
             while let Some(event) = event_rx.recv().await {
                 match event {
                     TransferEvent::TransferStarted { transfer_id, file_name, peer_id } => {
-                        let transfer_id_clone = transfer_id.clone();
+                        let _transfer_id_clone = transfer_id.clone();
                         let file_name_clone = file_name.clone();
                         let peer_id_clone = peer_id.clone();
-                        
+
                         // 创建传输记录
                         {
                             let mut h = history.write().await;
-                            h.insert(transfer_id_clone.clone(), TransferHistory {
-                                transfer_id: transfer_id_clone.clone(),
+                            h.insert(_transfer_id_clone.clone(), TransferHistory {
+                                transfer_id: _transfer_id_clone.clone(),
                                 file_name: file_name_clone,
                                 peer_id: peer_id_clone.clone(),
                                 file_size: 0,
@@ -153,7 +153,7 @@ impl MonitoringDashboard {
                                 speed_bps: 0,
                             });
                         }
-                        
+
                         // 更新节点信息
                         {
                             let mut p = peer_info.write().await;
@@ -169,16 +169,15 @@ impl MonitoringDashboard {
                             peer.total_transfers += 1;
                             peer.last_activity = Some(Utc::now());
                         }
-                        
-                        info!("📊 传输开始: {}", transfer_id_clone);
+
+                        info!("📊 传输开始: {}", _transfer_id_clone);
                     }
                     
                     TransferEvent::ProgressUpdate { transfer_id, progress, speed_bps } => {
                         // 更新历史记录
                         {
-                            let transfer_id_clone = transfer_id.clone();
                             let mut h = history.write().await;
-                            if let Some(record) = h.get_mut(&transfer_id_clone) {
+                            if let Some(record) = h.get_mut(&transfer_id) {
                                 record.progress = progress;
                                 record.speed_bps = speed_bps;
                             }
@@ -195,9 +194,8 @@ impl MonitoringDashboard {
                         
                         // 更新历史记录
                         {
-                            let transfer_id_clone = transfer_id.clone();
                             let mut h = history.write().await;
-                            if let Some(record) = h.get_mut(&transfer_id_clone) {
+                            if let Some(record) = h.get_mut(&transfer_id) {
                                 record.status = TransferStatus::Completed;
                                 record.end_time = Some(Utc::now());
                                 record.file_size = file_size;

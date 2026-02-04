@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::time::timeout;
 
 // Stub iroh types for compatibility
 #[derive(Clone)]

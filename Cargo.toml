@@ -88,6 +88,15 @@ nori = { version = "0.1", optional = true }
 jni = { version = "0.21", optional = true }
 android_log = { version = "0.1", optional = true }
 
+# Agent 模块依赖
+dirs = "5.0"
+regex = "1.10"
+serde_yaml = "0.9"
+tauri = { version = "2.0", optional = true }
+glob = "0.3"
+walkdir = "2.5"
+which = "6.0"
+
 [features]
 default = ["async-trait"]
 ffi = []
@@ -96,6 +105,7 @@ blockchain = ["async-trait", "ethers", "ethers-core"]
 wasm = ["wasm-bindgen", "web-sys", "js-sys", "wasm-bindgen-futures", "console_error_panic_hook"]
 workers = ["wasm", "async-trait"]
 zk_proof = ["nori"]
+tauri = ["dep:tauri"]
 
 # 为 Android 构建配置库类型
 [lib]
@@ -182,7 +192,3 @@ wasm-bindgen-test = "0.3.56"
 lto = true
 codegen-units = 1
 opt-level = "s"  # 优化WASM大小
-
-[profile.release.wasm]
-opt-level = "z"  # 最大优化WASM大小
-panic = "abort"  # 减少WASM大小

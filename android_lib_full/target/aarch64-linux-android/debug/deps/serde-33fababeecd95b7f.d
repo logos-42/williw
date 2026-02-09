@@ -1,0 +1,14 @@
+D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\deps\serde-33fababeecd95b7f.d: C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\build\serde-4b16cf022217ffb5\out/private.rs
+
+D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\deps\libserde-33fababeecd95b7f.rlib: C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\build\serde-4b16cf022217ffb5\out/private.rs
+
+D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\deps\libserde-33fababeecd95b7f.rmeta: C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\build\serde-4b16cf022217ffb5\out/private.rs
+
+C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\lib.rs:
+C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\integer128.rs:
+C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\mod.rs:
+C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs:
+C:\Users\Mechrevo\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\ser.rs:
+D:\AI\去中心化训练\android_lib_full\target\aarch64-linux-android\debug\build\serde-4b16cf022217ffb5\out/private.rs:
+
+# env-dep:OUT_DIR=D:\\AI\\去中心化训练\\android_lib_full\\target\\aarch64-linux-android\\debug\\build\\serde-4b16cf022217ffb5\\out

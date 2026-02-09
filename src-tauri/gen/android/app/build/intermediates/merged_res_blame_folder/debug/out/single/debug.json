@@ -1,0 +1,98 @@
+[
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-hdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-mdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-mdpi/ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-mdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/drawable_ai_message_background.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/drawable/ai_message_background.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-mdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/xml_file_paths.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxhdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxxhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/layout_activity_main.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/layout_item_chat_message.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/layout/item_chat_message.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xhdpi/ic_launcher_round.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/drawable_edittext_background.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/drawable/edittext_background.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-hdpi/ic_launcher.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-hdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-hdpi/ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xhdpi/ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxhdpi/ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "com.williw.mobile.app-main-36:/mipmap-xxxhdpi/ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "com.williw.mobile.app-merged_res-34:/drawable_user_message_background.xml.flat",
+        "source": "com.williw.mobile.app-main-36:/drawable/user_message_background.xml"
+    }
+]

@@ -1,0 +1,15 @@
+# GPU推理服务器依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# GPU和AI框架依赖
+torch>=2.1.0
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# 可选依赖（用于更好的性能）
+# bitsandbytes==0.41.3  # 量化支持
+# optimum==1.16.0  # 模型优化

@@ -1,0 +1,20 @@
+[package]
+name = "reward-management"
+version = "0.1.0"
+description = "Reward management contract for decentralized training"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "reward_management"
+
+[features]
+default = []
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.32.1"
+shared-types = { path = "../shared/types" }

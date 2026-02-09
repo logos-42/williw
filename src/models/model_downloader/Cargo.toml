@@ -1,0 +1,21 @@
+[package]
+name = "model-downloader"
+version = "0.1.0"
+edition = "2021"
+description = "Rust library for downloading models from Hugging Face"
+license = "MIT OR Apache-2.0"
+authors = ["Williw Team"]
+repository = "https://github.com/williw/model-downloader"
+
+[lib]
+name = "model_downloader"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"

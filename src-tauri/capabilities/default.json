@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for the application",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-listen",
+    "core:window:allow-show",
+    "core:window:allow-close",
+    "core:window:allow-set-title",
+    "shell:allow-execute",
+    "shell:allow-open"
+  ]
+}

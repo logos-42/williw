@@ -7,6 +7,60 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use std::sync::Arc;
 
+/// 上下文条目
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextEntry {
+    /// 条目ID
+    pub id: String,
+    /// 条目类型
+    pub entry_type: ContextType,
+    /// 内容
+    pub content: String,
+    /// 重要性评分 (0-10)
+    pub importance: u8,
+    /// 时间戳
+    pub timestamp: i64,
+    /// 关联的任务ID
+    pub task_id: Option<String>,
+}
+
+/// 上下文类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ContextType {
+    /// 输入
+    Input,
+    /// 输出
+    Output,
+    /// 工具调用
+    ToolCall,
+    /// 工具结果
+    ToolResult,
+    /// 错误
+    Error,
+    /// 状态更新
+    StatusUpdate,
+    /// 决策
+    Decision,
+    /// 学习总结
+    LearningSummary,
+}
+
+impl ContextType {
+    /// 获取上下文类型的字符串表示
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ContextType::Input => "INPUT",
+            ContextType::Output => "OUTPUT",
+            ContextType::ToolCall => "TOOL_CALL",
+            ContextType::ToolResult => "TOOL_RESULT",
+            ContextType::Error => "ERROR",
+            ContextType::StatusUpdate => "STATUS_UPDATE",
+            ContextType::Decision => "DECISION",
+            ContextType::LearningSummary => "LEARNING_SUMMARY",
+        }
+    }
+}
+
 /// Agent 执行上下文
 #[derive(Debug, Clone)]
 pub struct AgentContext {

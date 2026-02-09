@@ -8,6 +8,9 @@ use std::collections::HashMap;
 mod layered_prompts;
 pub use layered_prompts::*;
 
+mod ai_workflow_prompts;
+pub use ai_workflow_prompts::*;
+
 /// 提示词模板
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptTemplate {

@@ -229,18 +229,6 @@ pub fn detect_battery() -> (Option<f32>, bool) {
         if let Ok(batteries) = manager.batteries() {
             for battery_result in batteries {
                 if let Ok(battery) = battery_result {
-<<<<<<< HEAD
-                    let state = battery.state();
-                    let is_charging = matches!(
-                        state,
-                        battery::State::Charging | battery::State::Full
-                    );
-                    
-                    let percentage = battery.state_of_charge();
-                    let level = percentage.value as f32;
-                    if level >= 0.0 && level <= 1.0 {
-                        return (Some(level), is_charging);
-=======
                     if let Ok(state) = battery.state() {
                         let is_charging = matches!(
                             state,
@@ -253,7 +241,6 @@ pub fn detect_battery() -> (Option<f32>, bool) {
                                 return (Some(level), is_charging);
                             }
                         }
->>>>>>> 841cce86c333eeff5540d8e2c08c2d41ed9d6d25
                     }
                 }
             }

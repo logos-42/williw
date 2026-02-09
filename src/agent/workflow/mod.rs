@@ -11,6 +11,7 @@ pub mod workflow_history;
 pub mod workflow_monitor;
 pub mod workflow_storage;
 pub mod ralph_loop;
+pub mod ai_automation_example;
 
 // 重新导出主要类型
 pub use workflow::*;
@@ -22,3 +23,4 @@ pub use workflow_history::*;
 pub use workflow_monitor::*;
 pub use workflow_storage::*;
 pub use ralph_loop::*;
+pub use ai_automation_example::*;

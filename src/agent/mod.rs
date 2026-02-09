@@ -10,6 +10,7 @@ pub mod context;
 pub mod prompts;
 pub mod skills;
 pub mod bridges;
+pub mod compute;
 
 // 导出主要类型和函数
 pub use tools::*;

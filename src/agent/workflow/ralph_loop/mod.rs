@@ -7,6 +7,7 @@ pub mod ai_decision;
 pub mod research;
 pub mod learning;
 pub mod retry_strategy;
+pub mod auto_environment;
 
 // 重新导出主要类型和功能
 pub use core::*;
@@ -14,3 +15,4 @@ pub use ai_decision::*;
 pub use research::*;
 pub use learning::*;
 pub use retry_strategy::*;
+pub use auto_environment::*;

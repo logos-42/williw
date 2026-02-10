@@ -3,7 +3,8 @@
 //! 展示如何使用Ralph Loop、自动环境配置和去中心化算力共享
 
 use super::*;
-use crate::agent::compute::{ComputeResourceManager, ComputeTask, ComputeTaskType, TaskPayload, ComputeRequirements, TaskPriority};
+use crate::agent::compute::{ComputeResourceManager, ComputeTask, ComputeTaskType, TaskPayload, ComputeRequirements};
+use crate::agent::compute::decentralized_compute::TaskPriority;
 use crate::agent::prompts::{LayeredPromptManager, add_ai_workflow_prompts};
 use crate::device::types::GpuComputeApi;
 use std::sync::Arc;
@@ -244,7 +245,7 @@ impl AIAutomationDemo {
                 requires_internet: false,
                 preferred_regions: vec!["asia".to_string()],
             },
-            priority: TaskPriority::Normal,
+            priority: crate::agent::compute::decentralized_compute::TaskPriority::Normal,
             deadline: Some(chrono::Utc::now().timestamp() + 3600),
             requester: "demo_node".to_string(),
             assigned_node: None,

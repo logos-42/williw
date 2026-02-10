@@ -4,6 +4,7 @@
 
 use super::layered_prompts::{LayeredPromptManager, PromptLayer, LayeredPrompt};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 
 /// AI工作流Prompt模板
 pub struct AIWorkflowPrompts;

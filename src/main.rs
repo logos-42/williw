@@ -1,8 +1,5 @@
 mod args;
-<<<<<<< HEAD
 mod agent;
-=======
->>>>>>> 841cce86c333eeff5540d8e2c08c2d41ed9d6d25
 mod comms;
 mod config;
 mod consensus;

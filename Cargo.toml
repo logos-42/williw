@@ -37,7 +37,7 @@ metadata-uploader = { path = "src/models/metadata_uploader" }
 model-splitter = { path = "src/models/model_splitter" }
 
 # HTTP client for model operations
-reqwest = { version = "0.13.1", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -48,9 +48,10 @@ log = "0.4"
 md5 = "0.7"
 blake3 = "1.5"
 digest = "0.10"
+tempfile = "3.8"
 
 # CLI argument parsing
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 
 # WebAssembly support (optional)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -60,10 +61,10 @@ console_error_panic_hook = { version = "0.1", optional = true }
 
 # Concurrency utilities
 parking_lot = "0.12"
-rayon = "1.8"
+rayon = "1.11"
 
 # System and device detection
-sysinfo = { version = "0.37.2", default-features = true }
+sysinfo = { version = "0.38", default-features = true }
 libloading = "0.9"
 battery = "0.7"
 
@@ -123,53 +124,6 @@ path = "src/main.rs"
 name = "p2p_model_distribution_demo"
 path = "src/bin/p2p_model_distribution_demo.rs"
 
-[[example]]
-name = "multi_node_test"
-path = "examples/multi_node_test.rs"
-
-[[example]]
-name = "simple_distance_test"
-path = "examples/simple_distance_test.rs"
-
-[[example]]
-name = "comms_distance_test"
-path = "examples/comms_distance_test.rs"
-
-[[example]]
-name = "desktop_app_integration_example"
-path = "examples/desktop_app_integration_example.rs"
-
-[[example]]
-name = "hf_model_demo"
-path = "examples/hf_model_demo.rs"
-
-[[example]]
-name = "model_distribution_demo"
-path = "examples/model_distribution_demo.rs"
-
-[[example]]
-name = "p2p_frontend_integration_test"
-path = "examples/p2p_frontend_integration_test.rs"
-
-[[example]]
-name = "p2p_model_distribution_demo"
-path = "examples/p2p_model_distribution_demo.rs"
-
-[[example]]
-name = "simple_model_test"
-path = "examples/simple_model_test.rs"
-
-[[example]]
-name = "simple_rust_integration_test"
-path = "examples/simple_rust_integration_test.rs"
-
-[[example]]
-name = "test_metadata_uploader"
-path = "examples/test_metadata_uploader.rs"
-
-[[example]]
-name = "enhanced_p2p_demo"
-path = "examples/enhanced_p2p_demo.rs"
 
 [[bin]]
 name = "analyze_training"

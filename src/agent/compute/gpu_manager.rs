@@ -2,7 +2,7 @@
 //!
 //! 管理GPU节点的发现、调度、监控和算力共享
 
-use crate::device::capabilities::{DeviceCapabilities, GpuComputeApi};
+use crate::device::{DeviceCapabilities, GpuComputeApi};
 use crate::comms::transport::iroh::{IrohConnectionManager, WrappedMessage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

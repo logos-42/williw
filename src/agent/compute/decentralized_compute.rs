@@ -2,7 +2,7 @@
 //!
 //! 实现P2P算力共享、任务分发、结果聚合和激励机制
 
-use super::gpu_manager::{GpuManager, GpuNode, GpuTask, TaskStatus, NodeStatus};
+use super::gpu_manager::{GpuManager, TaskStatus, NodeStatus};
 use crate::comms::transport::iroh::{IrohConnectionManager, WrappedMessage, IrohConnectionConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -502,15 +502,18 @@ impl DecentralizedComputeNetwork {
                 // 获取待调度任务
                 let tasks_to_schedule: Vec<ComputeTask> = {
                     let mut queue = scheduler.task_queue.write().await;
-                    queue.drain(..queue.len().min(10)).collect()
+                    let len = queue.len().min(10);
+                    queue.drain(..len).collect()
                 };
 
                 for mut task in tasks_to_schedule {
                     // 调度每个子任务
-                    for subtask in &mut task.subtasks {
+                    let mut updated_subtasks = Vec::new();
+                    for mut subtask in task.subtasks.clone().into_iter() {
                         if subtask.status == TaskStatus::Pending {
-                            // 寻找最佳节点
-                            if let Some(best_node) = Self::find_best_node(&scheduler, &task).await {
+                            // 寻找最佳节点 - use a temporary task for the function call
+                            let temp_task = task.clone();
+                            if let Some(best_node) = Self::find_best_node(&scheduler, &temp_task).await {
                                 subtask.assigned_node = Some(best_node.clone());
                                 subtask.status = TaskStatus::Scheduled;
                                 
@@ -518,7 +521,9 @@ impl DecentralizedComputeNetwork {
                                     subtask.subtask_id, best_node);
                             }
                         }
+                        updated_subtasks.push(subtask);
                     }
+                    task.subtasks = updated_subtasks;
                 }
             }
         });
@@ -545,7 +550,7 @@ impl DecentralizedComputeNetwork {
             let mut queue = message_queue.lock().await;
             
             while *is_running.read().await {
-                if let Ok(message) = queue.recv().await {
+                if let Some(message) = queue.recv().await {
                     match message {
                         NetworkMessage::TaskResponse(result) => {
                             println!("📥 [DCN] Received task result from {}", result.node_id);

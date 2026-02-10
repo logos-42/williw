@@ -5,8 +5,9 @@
 pub mod gpu_manager;
 pub mod decentralized_compute;
 
-pub use gpu_manager::*;
-pub use decentralized_compute::*;
+// Explicit exports to avoid ambiguity
+pub use gpu_manager::{GpuManager, GpuNode, GpuTask, TaskStatus, NodeStatus, TaskPriority as GpuTaskPriority};
+pub use decentralized_compute::{DecentralizedComputeNetwork, TaskScheduler, TaskPriority as NetworkTaskPriority, ComputeTask, ComputeTaskType, TaskPayload, ComputeRequirements, SubTask};
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

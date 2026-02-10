@@ -112,7 +112,20 @@ pub struct ApiKeyEntry {
     pub id: String,
     pub name: String,
     pub key: String,
+    pub provider: String,
     pub created_at: String,
+}
+
+/// External API configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExternalApiConfig {
+    pub id: String,
+    pub name: String,
+    pub provider: String,  // "openai", "deepseek", "anthropic", "custom"
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub enabled: bool,
 }
 
 /// Workflow status
@@ -145,6 +158,7 @@ pub struct AppState {
     pub available_models: Arc<Mutex<Vec<ModelConfig>>>,
     pub device_info: Arc<Mutex<Option<DeviceInfo>>>,
     pub api_keys: Arc<Mutex<Vec<ApiKeyEntry>>>,
+    pub external_apis: Arc<Mutex<Vec<ExternalApiConfig>>>,
     pub api_client: crate::api_client::WorkersApiClient,
     pub workflow_status: Arc<Mutex<WorkflowStatus>>,
 }
@@ -229,6 +243,7 @@ impl AppState {
             available_models: Arc::new(Mutex::new(models)),
             device_info: Arc::new(Mutex::new(Some(device_info))),
             api_keys: Arc::new(Mutex::new(vec![])),
+            external_apis: Arc::new(Mutex::new(vec![])),
             api_client: crate::api_client::WorkersApiClient::new(
                 "https://williw.sirazede725.workers.dev".to_string()
             ),

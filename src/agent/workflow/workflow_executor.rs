@@ -615,6 +615,10 @@ mod tests {
         let config = RalphLoopConfig {
             smart_retry: SmartRetryStrategy {
                 enabled: true,
+                max_retries: 3,
+                base_delay_ms: 1000,
+                backoff_multiplier: 2.0,
+                jitter: true,
                 error_based_retry: std::collections::HashMap::new(),
                 adaptive_retry: false,
                 max_consecutive_failures: 3,

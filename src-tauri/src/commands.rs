@@ -1,4 +1,4 @@
-use crate::state::{AppState, ModelConfig, TrainingStatus, DeviceInfo, AppSettings, ApiKeyEntry, WorkflowStatus};
+use crate::state::{AppState, ModelConfig, TrainingStatus, DeviceInfo, AppSettings, ApiKeyEntry, WorkflowStatus, ExternalApiConfig};
 use williw::agent::workflow::AsyncWorkflowExecutor;
 use williw::agent::workflow::RalphLoopConfig;
 use tauri::Emitter;
@@ -163,6 +163,7 @@ pub fn create_api_key(
         id: Uuid::new_v4().to_string(),
         name,
         key: new_key.clone(),
+        provider: "williw".to_string(),
         created_at: Utc::now().to_rfc3339(),
     };
     
@@ -592,14 +593,35 @@ pub async fn start_gpu_server() -> Result<String, String> {
     // 构建Python服务器脚本的路径
     let server_script = project_root.join("gpu_inference_server_clean.py");
     
-    // 构建虚拟环境Python的路径
-    let venv_python = project_root.join("torch_env").join("Scripts").join("python.exe");
+    // 构建虚拟环境Python的路径 (支持 macOS/Linux 和 Windows)
+    let venv_python = if cfg!(target_os = "windows") {
+        project_root.join("torch_env").join("Scripts").join("python.exe")
+    } else {
+        project_root.join("torch_env").join("bin").join("python")
+    };
     
     // 选择Python解释器（优先使用虚拟环境）
     let python_exe = if venv_python.exists() {
         venv_python
     } else {
-        std::path::PathBuf::from("python")
+        // 尝试多个可能的 Python 命令
+        let possible_pythons = ["python3", "python"];
+        let mut found_python = None;
+        for py_cmd in &possible_pythons {
+            let check = Command::new(py_cmd)
+                .arg("--version")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .output();
+            if let Ok(output) = check {
+                if output.status.success() {
+                    found_python = Some(std::path::PathBuf::from(py_cmd));
+                    println!("找到Python: {}", py_cmd);
+                    break;
+                }
+            }
+        }
+        found_python.ok_or_else(|| "未找到Python解释器，请安装Python 3.8+".to_string())?
     };
     
     if !server_script.exists() {
@@ -949,17 +971,18 @@ pub async fn run_ai_setup(
     }).await;
 
     match result {
-        Ok(execution) => {
+        Ok(progress) => {
             println!("✅ [AI SETUP] Setup completed successfully");
             
             // Emit completion event
+            let execution_id = format!("setup_{}", chrono::Utc::now().timestamp_millis());
             let _ = app.emit("setup-complete", serde_json::json!({
                 "success": true,
-                "execution_id": execution.id,
+                "execution_id": execution_id,
                 "message": "系统配置完成！GPU推理服务已就绪。"
             }));
 
-            Ok(format!("Setup completed: {}", execution.id))
+            Ok(format!("Setup completed successfully"))
         }
         Err(e) => {
             eprintln!("❌ [AI SETUP] Setup failed: {}", e);
@@ -1032,4 +1055,207 @@ pub async fn start_gpu_inference_server(port: u16) -> Result<String, String> {
         }
         _ => Err("服务器启动后无法访问".to_string()),
     }
+}
+
+// ============ 外部 API 管理 ============
+
+/// 测试外部 API 连接
+#[tauri::command]
+pub async fn test_external_api(
+    provider: String,
+    base_url: String,
+    api_key: String,
+    model: String,
+) -> Result<serde_json::Value, String> {
+    use reqwest;
+    use std::time::Duration;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+
+    // 根据不同的提供商构建请求
+    let result = match provider.as_str() {
+        "openai" => {
+            let response = client
+                .post(format!("{}/chat/completions", base_url))
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 5,
+                }))
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let json: serde_json::Value = resp.json().await.map_err(|e| format!("解析响应失败: {}", e))?;
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": "API 连接成功！",
+                        "response": json.get("choices").map(|c| c.to_string()).unwrap_or_else(|| "OK".to_string()),
+                    }))
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp.text().await.unwrap_or_default();
+                    Err(format!("API 返回错误 ({}): {}", status, error_text))
+                }
+                Err(e) => Err(format!("连接失败: {}", e)),
+            }
+        }
+        "deepseek" => {
+            let response = client
+                .post(format!("{}/chat/completions", base_url))
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 5,
+                }))
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let json: serde_json::Value = resp.json().await.map_err(|e| format!("解析响应失败: {}", e))?;
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": "API 连接成功！",
+                        "response": json.get("choices").map(|c| c.to_string()).unwrap_or_else(|| "OK".to_string()),
+                    }))
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp.text().await.unwrap_or_default();
+                    Err(format!("API 返回错误 ({}): {}", status, error_text))
+                }
+                Err(e) => Err(format!("连接失败: {}", e)),
+            }
+        }
+        "anthropic" => {
+            let response = client
+                .post(format!("{}/messages", base_url))
+                .header("x-api-key", api_key)
+                .header("Content-Type", "application/json")
+                .header("anthropic-version", "2023-06-01")
+                .json(&serde_json::json!({
+                    "model": model,
+                    "max_tokens": 5,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                }))
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let json: serde_json::Value = resp.json().await.map_err(|e| format!("解析响应失败: {}", e))?;
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": "API 连接成功！",
+                        "response": json.get("content").map(|c| c.to_string()).unwrap_or_else(|| "OK".to_string()),
+                    }))
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp.text().await.unwrap_or_default();
+                    Err(format!("API 返回错误 ({}): {}", status, error_text))
+                }
+                Err(e) => Err(format!("连接失败: {}", e)),
+            }
+        }
+        "glm" | "kimichat" | "minimax" | "qwen" | "custom" | "google" | "nvidia" | "openrouter" | "vercel" | "groq" | "perplexity" => {
+            // 通用 OpenAI 兼容 API 调用
+            let response = client
+                .post(format!("{}/chat/completions", base_url))
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 5,
+                }))
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) if resp.status().is_success() => {
+                    let json: serde_json::Value = resp.json().await.map_err(|e| format!("解析响应失败: {}", e))?;
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": "API 连接成功！",
+                        "response": json.get("choices").map(|c| c.to_string()).unwrap_or_else(|| "OK".to_string()),
+                    }))
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let error_text = resp.text().await.unwrap_or_default();
+                    Err(format!("API 返回错误 ({}): {}", status, error_text))
+                }
+                Err(e) => Err(format!("连接失败: {}", e)),
+            }
+        }
+        _ => Err(format!("不支持的提供商: {}", provider)),
+    };
+
+    result
+}
+
+/// 保存外部 API 配置
+#[tauri::command]
+pub async fn save_external_api(
+    config: serde_json::Value,
+    state: State<'_, AppState>,
+) -> Result<ExternalApiConfig, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let entry = ExternalApiConfig {
+        id: id.clone(),
+        name: config.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_default(),
+        provider: config.get("provider").and_then(|v| v.as_str()).unwrap_or("custom").to_string(),
+        base_url: config.get("base_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        api_key: config.get("api_key").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        model: config.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        enabled: config.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+    };
+
+    state.external_apis.lock().push(entry.clone());
+    Ok(entry)
+}
+
+/// 获取外部 API 配置列表
+#[tauri::command]
+pub async fn get_external_apis(
+    state: State<'_, AppState>,
+) -> Result<Vec<ExternalApiConfig>, String> {
+    let apis = state.external_apis.lock().clone();
+    Ok(apis)
+}
+
+/// 删除外部 API 配置
+#[tauri::command]
+pub async fn delete_external_api(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut apis = state.external_apis.lock();
+    apis.retain(|api| api.id != id);
+    Ok(())
+}
+
+/// 切换外部 API 启用状态
+#[tauri::command]
+pub async fn toggle_external_api(
+    id: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut apis = state.external_apis.lock();
+    if let Some(api) = apis.iter_mut().find(|api| api.id == id) {
+        api.enabled = enabled;
+    }
+    Ok(())
 }

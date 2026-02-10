@@ -339,6 +339,7 @@ impl DocumentReader {
     }
 
     /// 解析任务文档
+    /// 解析任务文档
     pub fn parse_task(content: &str) -> Result<AgentTask, Box<dyn std::error::Error>> {
         let mut task = AgentTask {
             id: format!("task_{}", chrono::Utc::now().timestamp()),
@@ -352,7 +353,7 @@ impl DocumentReader {
         };
 
         let mut current_section = "";
-        let mut current_step: Option<TaskStep> = None;
+        let mut in_steps_section = false;
 
         for line in content.lines() {
             let line = line.trim();
@@ -360,46 +361,41 @@ impl DocumentReader {
             if line.starts_with("# ") {
                 task.name = line[2..].to_string();
             } else if line.starts_with("## ") {
-                // 保存当前步骤
-                if let Some(step) = current_step.take() {
-                    task.steps.push(step);
-                }
-                current_section = &line[3..];
-            } else if line.starts_with("### ") {
-                // 子节
+                let section = &line[3..];
+                current_section = section;
+                in_steps_section = section == "步骤";
             } else if line.starts_with("- [ ] ") || line.starts_with("- [x] ") {
-                let criterion = line[6..].to_string();
+                let criterion = line[6..].trim().to_string();
                 if current_section == "验收标准" {
                     task.acceptance_criteria.push(criterion);
                 }
-            } else if line.starts_with("- ") || line.starts_with("* ") {
-                let item = line[2..].to_string();
-                match current_section {
-                    "描述" => task.description = item,
-                    "目标" => task.goal = item,
-                    "步骤" => {
-                        let id = format!("{}", task.steps.len() + 1);
-                        current_step = Some(TaskStep {
-                            id,
-                            description: item,
-                            tool_hint: None,
-                            validation: None,
-                        });
+            } else if (line.starts_with("- ") || line.starts_with("* ")) && !line.starts_with("- [") {
+                let item = line[2..].trim().to_string();
+                if in_steps_section {
+                    // 在步骤节中，每个列表项都是一个新步骤
+                    let id = format!("{}", task.steps.len() + 1);
+                    task.steps.push(TaskStep {
+                        id,
+                        description: item,
+                        tool_hint: None,
+                        validation: None,
+                    });
+                } else {
+                    match current_section {
+                        "描述" => task.description = item,
+                        "目标" if task.goal.is_empty() => task.goal = item,
+                        _ => {}
                     }
-                    _ => {}
                 }
             } else if current_section == "目标" && !line.is_empty() && task.goal.is_empty() {
                 task.goal = line.to_string();
             }
         }
 
-        // 保存最后一个步骤
-        if let Some(step) = current_step {
-            task.steps.push(step);
-        }
-
         Ok(task)
     }
+
+
 }
 
 /// 文档驱动的Ralph Loop配置

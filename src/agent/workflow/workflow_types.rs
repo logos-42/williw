@@ -149,6 +149,14 @@ pub struct RalphLoopExecutionHistory {
 pub struct SmartRetryStrategy {
     /// 是否启用智能重试
     pub enabled: bool,
+    /// 最大重试次数
+    pub max_retries: u32,
+    /// 基础延迟（毫秒）
+    pub base_delay_ms: u64,
+    /// 退避乘数
+    pub backoff_multiplier: f64,
+    /// 是否启用抖动
+    pub jitter: bool,
     /// 基于错误类型的重试策略
     pub error_based_retry: std::collections::HashMap<String, RetryConfig>,
     /// 基于历史表现的动态调整

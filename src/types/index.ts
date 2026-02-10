@@ -52,3 +52,12 @@ export interface CheckpointSettings {
   interval_minutes: number;
   max_checkpoints: number;
 }
+
+/// Workflow status from backend
+export interface WorkflowStatus {
+  is_running: boolean;
+  is_first_run: boolean;
+  current_step: string;
+  progress: number;
+  message: string;
+}

@@ -115,6 +115,28 @@ pub struct ApiKeyEntry {
     pub created_at: String,
 }
 
+/// Workflow status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowStatus {
+    pub is_running: bool,
+    pub is_first_run: bool,
+    pub current_step: String,
+    pub progress: f32,
+    pub message: String,
+}
+
+impl Default for WorkflowStatus {
+    fn default() -> Self {
+        Self {
+            is_running: false,
+            is_first_run: true,
+            current_step: String::new(),
+            progress: 0.0,
+            message: String::new(),
+        }
+    }
+}
+
 /// Global application state
 pub struct AppState {
     pub settings: Arc<Mutex<AppSettings>>,
@@ -124,6 +146,7 @@ pub struct AppState {
     pub device_info: Arc<Mutex<Option<DeviceInfo>>>,
     pub api_keys: Arc<Mutex<Vec<ApiKeyEntry>>>,
     pub api_client: crate::api_client::WorkersApiClient,
+    pub workflow_status: Arc<Mutex<WorkflowStatus>>,
 }
 
 impl AppState {
@@ -209,6 +232,7 @@ impl AppState {
             api_client: crate::api_client::WorkersApiClient::new(
                 "https://williw.sirazede725.workers.dev".to_string()
             ),
+            workflow_status: Arc::new(Mutex::new(WorkflowStatus::default())),
         }
     }
 

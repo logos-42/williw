@@ -12,18 +12,27 @@ import {
   useTheme,
   alpha,
   CircularProgress,
+  LinearProgress,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import InfoIcon from '@mui/icons-material/Info';
 import { useModelStore } from '../store/modelStore';
+import { useWorkflowStore } from '../store/workflowStore';
 import { runInference, InferenceRequest } from '../services/inferenceService';
+import { listen } from '@tauri-apps/api/event';
 
 interface ChatMessage {
   id: string;
   content: string;
-  sender: 'user' | 'assistant';
+  sender: 'user' | 'assistant' | 'workflow';
   timestamp: Date;
+  workflowType?: 'info' | 'progress' | 'success' | 'error' | 'warning';
+  workflowProgress?: number;
 }
 
 interface ChatBoxProps {
@@ -38,6 +47,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
   const [isAiThinking, setIsAiThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { inferenceResult, isInferenceLoading } = useModelStore();
+  const { status, addMessage } = useWorkflowStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -72,6 +82,68 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
       setMessages(prev => [...prev, loadingMessage]);
     }
   }, [isInferenceLoading, messages.length]);
+
+  // 监听工作流消息事件
+  useEffect(() => {
+    let unlistenFn: any = null;
+
+    const setupWorkflowListeners = async () => {
+      try {
+        // 监听工作流消息
+        unlistenFn = await listen('workflow-message', (event: any) => {
+          const { type, content, progress } = event.payload as {
+            type: string;
+            content: string;
+            progress?: number;
+          };
+
+          const workflowMessage: ChatMessage = {
+            id: `workflow-${Date.now()}-${Math.random()}`,
+            content,
+            sender: 'workflow',
+            timestamp: new Date(),
+            workflowType: type as any,
+            workflowProgress: progress,
+          };
+
+          setMessages(prev => [...prev, workflowMessage]);
+          addMessage({
+            type: type as any,
+            content,
+            timestamp: new Date(),
+          });
+        });
+
+        console.log('✅ Workflow listeners registered');
+      } catch (error) {
+        console.error('Failed to setup workflow listeners:', error);
+      }
+    };
+
+    setupWorkflowListeners();
+
+    return () => {
+      if (unlistenFn) {
+        unlistenFn();
+      }
+    };
+  }, [addMessage]);
+
+  // 监听工作流完成状态
+  useEffect(() => {
+    if (status.isCompleted && messages.length > 0) {
+      // 工作流完成后，自动添加欢迎消息
+      setTimeout(() => {
+        const welcomeMessage: ChatMessage = {
+          id: `welcome-${Date.now()}`,
+          content: '🎉 现在可以开始与AI对话了！请输入您的问题或任务。',
+          sender: 'assistant',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, welcomeMessage]);
+      }, 2000);
+    }
+  }, [status.isCompleted, messages.length]);
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isAiThinking) return;
@@ -205,14 +277,20 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                         ml: message.sender === 'user' ? 1 : 0,
                         background: message.sender === 'user'
                           ? alpha(theme.palette.primary.main, 0.2)
+                          : message.sender === 'workflow'
+                          ? alpha(theme.palette.info.main, 0.2)
                           : alpha(theme.palette.secondary.main, 0.2),
                         color: message.sender === 'user'
                           ? theme.palette.primary.main
+                          : message.sender === 'workflow'
+                          ? theme.palette.info.main
                           : theme.palette.secondary.main,
                       }}
                     >
                       {message.sender === 'user' ? (
                         <PersonIcon sx={{ fontSize: 16 }} />
+                      ) : message.sender === 'workflow' ? (
+                        <AutoFixHighIcon sx={{ fontSize: 16 }} />
                       ) : (
                         <SmartToyIcon sx={{ fontSize: 16 }} />
                       )}
@@ -226,12 +304,79 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                             borderRadius: 1,
                             background: message.sender === 'user'
                               ? alpha(theme.palette.primary.main, 0.1)
+                              : message.sender === 'workflow'
+                              ? alpha(
+                                  message.workflowType === 'error'
+                                    ? theme.palette.error.main
+                                    : message.workflowType === 'success'
+                                    ? theme.palette.success.main
+                                    : theme.palette.info.main,
+                                  0.1
+                                )
                               : alpha(theme.palette.secondary.main, 0.1),
                             border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
                             maxWidth: '70%',
                           }}
                         >
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                          {message.sender === 'workflow' && (
+                            <>
+                              {message.workflowType === 'success' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                  <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                                  <Typography variant="caption" color="success.main">
+                                    完成
+                                  </Typography>
+                                </Box>
+                              )}
+                              {message.workflowType === 'error' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                  <ErrorIcon sx={{ fontSize: 16, color: 'error.main' }} />
+                                  <Typography variant="caption" color="error.main">
+                                    错误
+                                  </Typography>
+                                </Box>
+                              )}
+                              {message.workflowType === 'progress' && (
+                                <>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                    <AutoFixHighIcon sx={{ fontSize: 16, color: 'info.main' }} />
+                                    <Typography variant="caption" color="info.main">
+                                      AI工作流
+                                    </Typography>
+                                  </Box>
+                                  {message.workflowProgress !== undefined && (
+                                    <Box sx={{ mt: 0.5 }}>
+                                      <LinearProgress
+                                        variant="determinate"
+                                        value={message.workflowProgress * 100}
+                                        sx={{
+                                          height: 4,
+                                          borderRadius: 2,
+                                          background: alpha(theme.palette.info.main, 0.1),
+                                        }}
+                                      />
+                                    </Box>
+                                  )}
+                                </>
+                              )}
+                              {message.workflowType === 'info' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                  <InfoIcon sx={{ fontSize: 16, color: 'info.main' }} />
+                                  <Typography variant="caption" color="info.main">
+                                    信息
+                                  </Typography>
+                                </Box>
+                              )}
+                            </>
+                          )}
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.875rem',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                            }}
+                          >
                             {message.content}
                           </Typography>
                         </Box>

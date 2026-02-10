@@ -11,12 +11,15 @@ import {
 } from '@mui/material';
 import { useTrainingStore } from '../store/trainingStore';
 import { useModelStore } from '../store/modelStore';
+import { useWorkflowStore } from '../store/workflowStore';
 import { pythonClient } from '../utils/pythonClient';
+import { invoke } from '@tauri-apps/api/core';
 
 export const TrainingSwitch: React.FC = () => {
   const theme = useTheme();
   const { isRunning, setRunning } = useTrainingStore();
   const { selectedModel } = useModelStore();
+  const { isFirstTime, setFirstTime } = useWorkflowStore();
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -63,15 +66,33 @@ export const TrainingSwitch: React.FC = () => {
           return;
         }
 
+        // 如果是首次运行，启动文档驱动工作流
+        if (isFirstTime) {
+          console.log('🚀 First run detected, starting document-driven workflow...');
+          try {
+            await invoke('start_document_driven_workflow', {
+              apiKey: '',
+              modelPath: selectedModel,
+            });
+            console.log('✅ Workflow started successfully');
+            setFirstTime(false);
+          } catch (error) {
+            console.error('Failed to start workflow:', error);
+            // 工作流启动失败不影响训练启动
+          }
+        }
+
         // 发送训练请求到Python服务
         const result = await pythonClient.startTraining(selectedModel);
         console.log('Training started:', result);
-        
+
         if (result.status === 'success') {
           setRunning(true);
           setNotification({
             open: true,
-            message: `训练已启动，使用模型: ${selectedModel}`,
+            message: isFirstTime
+              ? 'AI自主工作流已启动，请查看右侧对话框'
+              : `训练已启动，使用模型: ${selectedModel}`,
             severity: 'success',
           });
         } else {

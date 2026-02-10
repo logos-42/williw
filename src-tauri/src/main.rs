@@ -7,6 +7,7 @@ mod events;
 mod api_client;
 
 use tauri::Emitter;
+use tauri::Manager;
 use state::AppState;
 
 // Initialize logger
@@ -50,6 +51,8 @@ async fn main() {
             commands::check_gpu_server_status,
             commands::install_gpu_dependencies,
             commands::upload_full_node_info_to_workers,
+            commands::get_workflow_status,
+            commands::start_document_driven_workflow,
         ])
         .setup(|app| {
             // Initialize event handlers
@@ -93,32 +96,32 @@ async fn main() {
                             
                             // Build peers list
                             let mut peers = Vec::new();
-                            for peer_id in primary_peers {
-                                if let Some(snapshot) = node.topology.peer_snapshot(&peer_id) {
+                            for peer_id: &String in primary_peers {
+                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
                                     peers.push(crate::api_client::IrohPeerInfo {
                                         id: peer_id.to_string(),
                                         peer_type: "primary".to_string(),
-                                        similarity: snapshot.similarity,
-                                        geo_affinity: snapshot.geo_affinity,
+                                        similarity: snapshot.similarity as f64,
+                                        geo_affinity: snapshot.geo_affinity as f64,
                                         embedding_dim: snapshot.embedding_dim,
                                         position: crate::api_client::GeoPosition {
-                                            lat: snapshot.position.lat,
-                                            lon: snapshot.position.lon,
+                                            lat: snapshot.position.lat as f64,
+                                            lon: snapshot.position.lon as f64,
                                         },
                                     });
                                 }
                             }
-                            for peer_id in backup_peers {
-                                if let Some(snapshot) = node.topology.peer_snapshot(&peer_id) {
+                            for peer_id: &String in backup_peers {
+                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
                                     peers.push(crate::api_client::IrohPeerInfo {
                                         id: peer_id.to_string(),
                                         peer_type: "backup".to_string(),
-                                        similarity: snapshot.similarity,
-                                        geo_affinity: snapshot.geo_affinity,
+                                        similarity: snapshot.similarity as f64,
+                                        geo_affinity: snapshot.geo_affinity as f64,
                                         embedding_dim: snapshot.embedding_dim,
                                         position: crate::api_client::GeoPosition {
-                                            lat: snapshot.position.lat,
-                                            lon: snapshot.position.lon,
+                                            lat: snapshot.position.lat as f64,
+                                            lon: snapshot.position.lon as f64,
                                         },
                                     });
                                 }
@@ -132,7 +135,7 @@ async fn main() {
                                     max_memory_mb: capabilities.max_memory_mb,
                                     cpu_cores: capabilities.cpu_cores,
                                     has_gpu: capabilities.has_gpu,
-                                    network_type: capabilities.network_type.clone(),
+                                    network_type: format!("{:?}", capabilities.network_type),
                                     battery_level: capabilities.battery_level,
                                     is_charging: capabilities.is_charging,
                                 },

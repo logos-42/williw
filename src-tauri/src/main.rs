@@ -52,6 +52,9 @@ async fn main() {
             commands::install_gpu_dependencies,
             commands::get_workflow_status,
             commands::start_document_driven_workflow,
+            commands::run_ai_setup,
+            commands::check_setup_status,
+            commands::start_gpu_inference_server,
         ])
         .setup(|app| {
             // Initialize event handlers

@@ -858,3 +858,178 @@ pub async fn start_document_driven_workflow(
 
     Ok(format!("Workflow started with ID: {}", execution_id))
 }
+
+/// Run AI-guided system setup
+#[tauri::command]
+pub async fn run_ai_setup(
+    api_key: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    println!("🤖 [AI SETUP] Starting AI-guided system setup...");
+
+    use williw::agent::setup::{AISetupAssistant, SetupProgress, SetupStatus};
+    use tauri::Emitter;
+
+    // Update workflow status
+    {
+        let mut workflow_status = state.workflow_status.lock();
+        workflow_status.is_running = true;
+        workflow_status.progress = 0.0;
+        workflow_status.message = "AI正在分析系统环境...".to_string();
+        workflow_status.current_step = "ai_detection".to_string();
+    }
+
+    // Emit initial event
+    let _ = app.emit("workflow-status", {
+        let status = state.workflow_status.lock();
+        (*status).clone()
+    });
+
+    let _ = app.emit("setup-progress", serde_json::json!({
+        "status": "detecting",
+        "message": "开始系统检测...",
+        "progress": 0.0,
+        "current_step": "系统检测"
+    }));
+
+    // Create setup assistant
+    let assistant = AISetupAssistant::new(api_key);
+
+    // Clone state and app handle for callback
+    let app_handle = app.clone();
+
+    // Run setup with progress callback
+    let result = assistant.run_full_setup(move |progress: SetupProgress| {
+        // Map setup status to frontend format
+        let status_str = match progress.status {
+            SetupStatus::NotStarted => "not_started",
+            SetupStatus::Detecting => "detecting",
+            SetupStatus::Planning => "planning",
+            SetupStatus::Executing => "executing",
+            SetupStatus::Verifying => "verifying",
+            SetupStatus::Completed => "completed",
+            SetupStatus::Failed => "failed",
+        };
+
+        let progress_percent = if progress.total_steps > 0 {
+            (progress.completed_steps as f32 / progress.total_steps as f32) * 100.0
+        } else {
+            0.0
+        };
+
+        // Emit progress event
+        let _ = app_handle.emit("setup-progress", serde_json::json!({
+            "status": status_str,
+            "message": progress.messages.last().unwrap_or(&"配置中...".to_string()),
+            "progress": progress_percent,
+            "total_steps": progress.total_steps,
+            "completed_steps": progress.completed_steps,
+            "current_step": progress.current_step,
+            "errors": progress.errors,
+        }));
+
+        // Also update workflow status
+        let status_message = match progress.status {
+            SetupStatus::Detecting => "AI正在检测系统环境...",
+            SetupStatus::Planning => "AI正在制定配置方案...",
+            SetupStatus::Executing => "正在执行配置步骤...",
+            SetupStatus::Verifying => "正在验证配置结果...",
+            SetupStatus::Completed => "配置完成！",
+            SetupStatus::Failed => "配置失败",
+            _ => "配置中...",
+        };
+
+        let _ = app_handle.emit("workflow-status", serde_json::json!({
+            "is_running": progress.status != SetupStatus::Completed && progress.status != SetupStatus::Failed,
+            "progress": progress_percent / 100.0,
+            "message": status_message,
+            "current_step": progress.current_step.clone().unwrap_or_else(|| "unknown".to_string()),
+        }));
+    }).await;
+
+    match result {
+        Ok(execution) => {
+            println!("✅ [AI SETUP] Setup completed successfully");
+            
+            // Emit completion event
+            let _ = app.emit("setup-complete", serde_json::json!({
+                "success": true,
+                "execution_id": execution.id,
+                "message": "系统配置完成！GPU推理服务已就绪。"
+            }));
+
+            Ok(format!("Setup completed: {}", execution.id))
+        }
+        Err(e) => {
+            eprintln!("❌ [AI SETUP] Setup failed: {}", e);
+            
+            // Emit failure event
+            let _ = app.emit("setup-failed", serde_json::json!({
+                "success": false,
+                "error": e.clone()
+            }));
+
+            Err(format!("Setup failed: {}", e))
+        }
+    }
+}
+
+/// Check system setup status
+#[tauri::command]
+pub async fn check_setup_status() -> Result<serde_json::Value, String> {
+    use williw::agent::setup::check_setup_status;
+    
+    let status = check_setup_status().await;
+    
+    Ok(serde_json::json!({
+        "python": status.get("python").copied().unwrap_or(false),
+        "pip": status.get("pip").copied().unwrap_or(false),
+        "cuda": status.get("cuda").copied().unwrap_or(false),
+        "torch": status.get("torch").copied().unwrap_or(false),
+        "transformers": status.get("transformers").copied().unwrap_or(false),
+        "inference_server": status.get("inference_server").copied().unwrap_or(false),
+    }))
+}
+
+/// Start GPU inference server
+#[tauri::command]
+pub async fn start_gpu_inference_server(port: u16) -> Result<String, String> {
+    use std::process::Command;
+    
+    let app_dir = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let project_root = app_dir.parent()
+        .ok_or("Failed to get project root directory")?;
+
+    let server_script = project_root.join("gpu_inference_server_clean.py");
+
+    if !server_script.exists() {
+        return Err(format!("服务器脚本不存在: {:?}", server_script));
+    }
+
+    println!("🚀 启动GPU推理服务器 (端口 {})...", port);
+
+    // 在后台启动服务器
+    #[cfg(target_os = "windows")]
+    {
+        let _child = Command::new("python")
+            .arg(&server_script)
+            .arg("--port")
+            .arg(port.to_string())
+            .spawn()
+            .map_err(|e| format!("无法启动服务器: {}", e))?;
+    }
+
+    // 等待服务器启动
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+    // 检查服务器是否响应
+    match reqwest::get(format!("http://localhost:{}/", port)).await {
+        Ok(response) if response.status().is_success() => {
+            Ok(format!("推理服务器已在端口 {} 启动", port))
+        }
+        _ => Err("服务器启动后无法访问".to_string()),
+    }
+}

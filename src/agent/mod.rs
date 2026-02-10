@@ -11,6 +11,7 @@ pub mod prompts;
 pub mod skills;
 pub mod bridges;
 pub mod compute;
+pub mod setup;
 
 // 导出主要类型和函数
 pub use tools::*;
@@ -20,6 +21,7 @@ pub use utils::*;
 pub use context::*;
 pub use prompts::*;
 pub use skills::*;
+pub use setup::*;
 
 /// Agent 状态管理器
 pub struct AgentManager {

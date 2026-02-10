@@ -18,6 +18,7 @@ pub mod agent_collaboration;
 pub mod tool_creation;
 pub mod iroh_comms;
 pub mod layered_prompt;
+pub mod decentralized_model;
 
 // 重新导出核心类型和接口
 pub use executor::{ToolExecutor, ToolResult, ToolError, ToolContext};
@@ -33,6 +34,7 @@ pub use agent_collaboration::{AgentCollaborationTool, CollaborationSession, PubS
 pub use tool_creation::{ToolCreationTool, ToolDefinition as CreatedToolDefinition, ToolType, ParameterDef, ToolUsageRecord, AgentToolUsageRecord, AgentToolRegistry, DynamicToolExecutor, DynamicToolResult};
 pub use iroh_comms::{IrohCommsTool, IrohCommsOperation};
 pub use layered_prompt::{LayeredPromptTool, LayeredPromptOperation};
+pub use decentralized_model::{DecentralizedModelTool, DecentralizedModelOperation};
 
 // 工具分类枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -59,6 +61,8 @@ pub enum ToolCategory {
     Communication,
     /// 开发工具
     Development,
+    /// 去中心化模型处理
+    DecentralizedModel,
     /// 其他
     Other,
 }
@@ -235,6 +239,10 @@ pub async fn initialize_tools() -> Result<ToolRegistry, Box<dyn std::error::Erro
     // 注册分层提示词工具
     let layered_prompt_tool = Arc::new(LayeredPromptTool::new());
     registry.register(layered_prompt_tool).await?;
+
+    // 注册去中心化模型处理工具
+    let decentralized_model_tool = Arc::new(DecentralizedModelTool::new());
+    registry.register(decentralized_model_tool).await?;
 
     Ok(registry)
 }

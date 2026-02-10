@@ -50,7 +50,6 @@ async fn main() {
             commands::start_gpu_server,
             commands::check_gpu_server_status,
             commands::install_gpu_dependencies,
-            commands::upload_full_node_info_to_workers,
             commands::get_workflow_status,
             commands::start_document_driven_workflow,
         ])
@@ -70,8 +69,9 @@ async fn main() {
             });
 
             // Start background task to upload full node info to workers every 30 seconds
-            let app_state_upload = app.state::<AppState>();
+            let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                let app_state = app_handle.state::<AppState>();
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
                 
                 log::info!("[AutoUpload] Starting automatic node info upload task (every 30s)");
@@ -81,13 +81,13 @@ async fn main() {
                     
                     // Get device info
                     let device_info = {
-                        let info = app_state_upload.device_info.lock();
+                        let info = app_state.device_info.lock();
                         info.clone()
                     };
                     
                     // Get iroh node info if available
                     let iroh_node = {
-                        let node_guard = app_state_upload.node.lock();
+                        let node_guard = app_state.node.lock();
                         if let Some(node) = node_guard.as_ref() {
                             let node_id = node.comms.node_id().to_string();
                             let capabilities = node.device_manager.get();
@@ -96,10 +96,10 @@ async fn main() {
                             
                             // Build peers list
                             let mut peers = Vec::new();
-                            for peer_id: &String in primary_peers {
-                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
+                            for peer_id in primary_peers {
+                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id.as_str()) {
                                     peers.push(crate::api_client::IrohPeerInfo {
-                                        id: peer_id.to_string(),
+                                        id: peer_id.clone(),
                                         peer_type: "primary".to_string(),
                                         similarity: snapshot.similarity as f64,
                                         geo_affinity: snapshot.geo_affinity as f64,
@@ -111,10 +111,10 @@ async fn main() {
                                     });
                                 }
                             }
-                            for peer_id: &String in backup_peers {
-                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
+                            for peer_id in backup_peers {
+                                if let Some(snapshot) = node.topology.peer_snapshot(peer_id.as_str()) {
                                     peers.push(crate::api_client::IrohPeerInfo {
-                                        id: peer_id.to_string(),
+                                        id: peer_id.clone(),
                                         peer_type: "backup".to_string(),
                                         similarity: snapshot.similarity as f64,
                                         geo_affinity: snapshot.geo_affinity as f64,
@@ -154,7 +154,7 @@ async fn main() {
                     
                     // Upload to workers
                     if let Some(device_info) = device_info {
-                        match app_state_upload.api_client.upload_full_node_info(device_info, iroh_node).await {
+                        match app_state.api_client.upload_full_node_info(device_info, iroh_node).await {
                             Ok(response) => {
                                 if response.success {
                                     log::info!("[AutoUpload] Node info uploaded successfully");

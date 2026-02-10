@@ -203,10 +203,14 @@ impl Default for RalphLoopConfig {
             enable_history: true,
             smart_retry: SmartRetryStrategy {
                 enabled: true,
+                max_retries: 3,
+                base_delay_ms: 1000,
+                backoff_multiplier: 2.0,
+                jitter: true,
                 error_based_retry: std::collections::HashMap::new(),
                 adaptive_retry: true,
-                max_consecutive_failures: 5,  // 增加容忍度
-                learning_period: 3,  // 减少学习周期
+                max_consecutive_failures: 5,
+                learning_period: 3,
             },
         }
     }

@@ -509,8 +509,8 @@ pub async fn upload_full_node_info_to_workers(
             
             // Build peers list
             let mut peers = Vec::new();
-            for peer_id: &String in primary_peers {
-                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
+            for peer_id in primary_peers {
+                if let Some(snapshot) = node.topology.peer_snapshot(peer_id.as_str()) {
                     peers.push(crate::api_client::IrohPeerInfo {
                         id: peer_id.to_string(),
                         peer_type: "primary".to_string(),
@@ -524,8 +524,8 @@ pub async fn upload_full_node_info_to_workers(
                     });
                 }
             }
-            for peer_id: &String in backup_peers {
-                if let Some(snapshot) = node.topology.peer_snapshot(peer_id) {
+            for peer_id in backup_peers {
+                if let Some(snapshot) = node.topology.peer_snapshot(peer_id.as_str()) {
                     peers.push(crate::api_client::IrohPeerInfo {
                         id: peer_id.to_string(),
                         peer_type: "backup".to_string(),
@@ -642,11 +642,9 @@ pub async fn start_gpu_server() -> Result<String, String> {
         Ok(Some(status)) => {
             if !status.success() {
                 // 尝试读取错误输出
-                if let Some(stderr) = child.stderr.take() {
-                    use tokio::io::AsyncReadExt;
+                if let Some(mut stderr) = child.stderr.take() {
                     let mut stderr_buf = String::new();
-                    let mut stderr_reader = tokio::io::BufReader::new(stderr);
-                    if let Ok(_) = stderr_reader.read_to_string(&mut stderr_buf).await {
+                    if let Ok(_) = std::io::Read::read_to_string(&mut stderr, &mut stderr_buf) {
                         return Err(format!("GPU服务器启动失败，退出码: {:?}\n错误信息: {}", status.code(), stderr_buf));
                     }
                 }
@@ -735,7 +733,7 @@ pub async fn start_document_driven_workflow(
     api_key: String,
     model_path: String,
     state: State<'_, AppState>,
-    app_handle: tauri::AppHandle,
+    app: tauri::AppHandle,
 ) -> Result<String, String> {
     println!("🚀 [WORKFLOW] Starting document-driven workflow...");
 
@@ -749,7 +747,7 @@ pub async fn start_document_driven_workflow(
     }
 
     // Emit event to frontend
-    let _ = app_handle.emit("workflow-status", {
+    let _ = app.emit("workflow-status", {
         let status = state.workflow_status.lock();
         (*status).clone()
     });
@@ -768,26 +766,32 @@ pub async fn start_document_driven_workflow(
         max_cost: None,
         enable_history: true,
         smart_retry: williw::agent::workflow::SmartRetryStrategy {
+            enabled: true,
             max_retries: 3,
             base_delay_ms: 1000,
             backoff_multiplier: 2.0,
             jitter: true,
+            error_based_retry: std::collections::HashMap::new(),
+            adaptive_retry: false,
+            max_consecutive_failures: 3,
+            learning_period: 10,
         },
     };
 
     let execution_id = format!("exec-{}", Uuid::new_v4());
+    let execution_id_clone = execution_id.clone();
 
     // Emit starting message
-    let _ = app_handle.emit("workflow-message", serde_json::json!({
+    let _ = app.emit("workflow-message", serde_json::json!({
         "type": "info",
         "content": format!("🎭 AI身份：去中心化算力专家\n📋 任务：自动配置算力网络并加载模型\n🚀 正在启动自主工作流...\n")
     }));
 
     // Start workflow in background
-    let app_handle_clone = app_handle.clone();
+    let app_handle_clone = app.clone();
     let state_clone = state.workflow_status.clone();
     tokio::spawn(async move {
-        println!("📚 [WORKFLOW] Starting document-driven workflow with execution_id: {}", execution_id);
+        println!("📚 [WORKFLOW] Starting document-driven workflow with execution_id: {}", execution_id_clone);
 
         // Simulate workflow steps with progress updates
         let steps = vec![

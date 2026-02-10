@@ -72,6 +72,10 @@ impl AIAutomationDemo {
             enable_history: true,
             smart_retry: SmartRetryStrategy {
                 enabled: true,
+                max_retries: 3,
+                base_delay_ms: 1000,
+                backoff_multiplier: 2.0,
+                jitter: true,
                 error_based_retry: Default::default(),
                 adaptive_retry: true,
                 max_consecutive_failures: 3,

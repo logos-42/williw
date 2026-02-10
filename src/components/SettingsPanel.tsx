@@ -127,7 +127,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
       <DialogContent>
         <Grid container spacing={3}>
           {/* API 管理 */}
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" gutterBottom>
                 API 管理

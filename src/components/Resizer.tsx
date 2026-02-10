@@ -20,7 +20,7 @@ export const Resizer: React.FC<ResizerProps> = ({
 }) => {
   const resizerRef = useRef<HTMLDivElement>(null);
   const onResizeRef = useRef(onResize);
-  const rafIdRef = useRef<number>();
+  const rafIdRef = useRef<number | undefined>(undefined);
   const lastUpdateRef = useRef<number>(0);
 
   // 更新 ref 以保持最新的 onResize

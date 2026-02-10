@@ -167,7 +167,7 @@ export const TrainingDashboard: React.FC = () => {
   return (
     <Grid container spacing={2}>
       {/* 训练状态卡片 */}
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <CollapsibleCard title="训练状态">
           {trainingStatus ? (
             <Box>
@@ -192,7 +192,7 @@ export const TrainingDashboard: React.FC = () => {
               </Box>
 
               <Grid container spacing={2}>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     准确率
                   </Typography>
@@ -200,7 +200,7 @@ export const TrainingDashboard: React.FC = () => {
                     {(trainingStatus.accuracy * 100).toFixed(1)}%
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     损失
                   </Typography>
@@ -209,7 +209,7 @@ export const TrainingDashboard: React.FC = () => {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     处理样本数
                   </Typography>
@@ -226,11 +226,11 @@ export const TrainingDashboard: React.FC = () => {
       </Grid>
 
       {/* 设备信息卡片 */}
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <CollapsibleCard title="设备信息">
           {deviceInfo ? (
             <Grid container spacing={1.5}>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary" display="block">
                   GPU类型
                 </Typography>
@@ -238,7 +238,7 @@ export const TrainingDashboard: React.FC = () => {
                   {deviceInfo.gpu_type || '未检测到'}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary" display="block">
                   GPU使用率
                 </Typography>
@@ -246,7 +246,7 @@ export const TrainingDashboard: React.FC = () => {
                   {deviceInfo.gpu_usage != null ? `${deviceInfo.gpu_usage.toFixed(1)}%` : 'N/A'}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary" display="block">
                   GPU内存
                 </Typography>
@@ -255,7 +255,7 @@ export const TrainingDashboard: React.FC = () => {
                     `${deviceInfo.gpu_memory_used.toFixed(1)}/${deviceInfo.gpu_memory_total.toFixed(1)} GB` : 'N/A'}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary" display="block">
                   CPU核心
                 </Typography>
@@ -263,7 +263,7 @@ export const TrainingDashboard: React.FC = () => {
                   {deviceInfo.cpu_cores}核
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary" display="block">
                   总内存
                 </Typography>
@@ -272,7 +272,7 @@ export const TrainingDashboard: React.FC = () => {
                 </Typography>
               </Grid>
               {deviceInfo.battery_level != null && (
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <Typography variant="caption" color="text.secondary" display="block">
                     电池
                   </Typography>
@@ -289,11 +289,11 @@ export const TrainingDashboard: React.FC = () => {
       </Grid>
 
       {/* 节点信息卡片 */}
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <CollapsibleCard title="节点信息">
           {nodeInfo ? (
             <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Box
                   sx={{
                     p: 1.5,
@@ -316,7 +316,7 @@ export const TrainingDashboard: React.FC = () => {
                 </Box>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Box
                   sx={{
                     p: 1.5,
@@ -336,7 +336,7 @@ export const TrainingDashboard: React.FC = () => {
 
               {nodeInfo.device_capabilities && (
                 <>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       内存
                     </Typography>
@@ -344,7 +344,7 @@ export const TrainingDashboard: React.FC = () => {
                       {nodeInfo.device_capabilities.max_memory_mb}MB
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       CPU核心
                     </Typography>
@@ -352,7 +352,7 @@ export const TrainingDashboard: React.FC = () => {
                       {nodeInfo.device_capabilities.cpu_cores}核
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       GPU
                     </Typography>
@@ -360,7 +360,7 @@ export const TrainingDashboard: React.FC = () => {
                       {nodeInfo.device_capabilities.has_gpu ? '有' : '无'}
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       网络类型
                     </Typography>
@@ -378,12 +378,12 @@ export const TrainingDashboard: React.FC = () => {
       </Grid>
 
       {/* 连接节点卡片 */}
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <CollapsibleCard title="连接节点" defaultCollapsed={true}>
           {connectedPeers.length > 0 ? (
             <Grid container spacing={1}>
               {connectedPeers.map((peer, index) => (
-                <Grid item xs={12} sm={6} md={4} key={peer.id || index}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={peer.id || index}>
                   <Box
                     sx={{
                       p: 1.5,

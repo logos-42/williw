@@ -12,16 +12,19 @@ import {
 import { useTrainingStore } from '../store/trainingStore';
 import { useModelStore } from '../store/modelStore';
 import { useWorkflowStore } from '../store/workflowStore';
+import { useUIStore } from '../store/uiStore';
 import { pythonClient } from '../utils/pythonClient';
 import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
 
 export const TrainingSwitch: React.FC = () => {
   const theme = useTheme();
   const { isRunning, setRunning } = useTrainingStore();
   const { selectedModel } = useModelStore();
   const { isFirstTime, setFirstTime } = useWorkflowStore();
+  const { showRightPanel } = useUIStore();
   const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success',
@@ -55,7 +58,49 @@ export const TrainingSwitch: React.FC = () => {
           return;
         }
 
-        // 检查是否选择了模型
+        // 每次点击都启动文档驱动工作流（用于调试）
+        console.log('🚀 Starting document-driven workflow...');
+        
+        // 展开右侧对话框
+        showRightPanel();
+        
+        // 发送欢迎消息到对话框
+        await emit('workflow-message', {
+          type: 'info',
+          content: '🎉 欢迎使用 Williw 去中心化算力平台！\n\n🤖 AI 助手正在为您进行配置...\n\n📋 配置内容包括：\n• 检测 GPU 可用性\n• 安装必要的依赖\n• 配置 Iroh P2P 网络\n• 初始化去中心化节点\n\n⏳ 请稍候，这个过程大约需要几分钟...',
+        });
+        
+        setNotification({
+          open: true,
+          message: '正在启动AI自主配置工作流，请查看右侧对话框...',
+          severity: 'info',
+        });
+        
+        try {
+          console.log('📤 Invoking start_document_driven_workflow...');
+          const result = await invoke<string>('start_document_driven_workflow', {
+            apiKey: '',
+            modelPath: selectedModel || '',
+          });
+          console.log('✅ Workflow started successfully:', result);
+          setFirstTime(false);
+          setNotification({
+            open: true,
+            message: '✅ AI自主配置工作流已启动！',
+            severity: 'success',
+          });
+          setLoading(false);
+          return;
+        } catch (error) {
+          console.error('❌ Failed to start workflow:', error);
+          setNotification({
+            open: true,
+            message: '❌ 工作流启动失败: ' + (error instanceof Error ? error.message : '未知错误'),
+            severity: 'error',
+          });
+        }
+
+        // 检查是否选择了模型（只在非首次运行时检查）
         if (!selectedModel) {
           setNotification({
             open: true,
@@ -64,22 +109,6 @@ export const TrainingSwitch: React.FC = () => {
           });
           setLoading(false);
           return;
-        }
-
-        // 如果是首次运行，启动文档驱动工作流
-        if (isFirstTime) {
-          console.log('🚀 First run detected, starting document-driven workflow...');
-          try {
-            await invoke('start_document_driven_workflow', {
-              apiKey: '',
-              modelPath: selectedModel,
-            });
-            console.log('✅ Workflow started successfully');
-            setFirstTime(false);
-          } catch (error) {
-            console.error('Failed to start workflow:', error);
-            // 工作流启动失败不影响训练启动
-          }
         }
 
         // 发送训练请求到Python服务

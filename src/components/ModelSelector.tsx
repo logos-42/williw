@@ -130,8 +130,8 @@ export const ModelSelector: React.FC = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* 模型选择和运行按钮 */}
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="caption" sx={{ mb: 1, color: 'text.secondary', display: 'block' }}>
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <Typography variant="caption" sx={{ mr: 1, color: 'text.secondary', whiteSpace: 'nowrap' }}>
                   模型
                 </Typography>
                 <FormControl fullWidth size="small">
@@ -157,7 +157,7 @@ export const ModelSelector: React.FC = () => {
                 </FormControl>
               </Box>
               
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', pb: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
                 <Button
                   variant="contained"
                   startIcon={isInferenceLoading ? <CircularProgress size={16} /> : <PlayArrowIcon />}
@@ -165,7 +165,7 @@ export const ModelSelector: React.FC = () => {
                   disabled={isInferenceLoading}
                   sx={{
                     px: 2,
-                    py: 1,
+                    py: 0.75,
                     fontSize: '0.875rem',
                     minWidth: '80px',
                   }}

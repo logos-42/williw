@@ -1,27 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Switch,
   Card,
   CardContent,
+  Typography,
   useTheme,
   alpha,
   Snackbar,
   Alert,
 } from '@mui/material';
 import { useTrainingStore } from '../store/trainingStore';
-import { useModelStore } from '../store/modelStore';
-import { useWorkflowStore } from '../store/workflowStore';
 import { useUIStore } from '../store/uiStore';
-import { pythonClient } from '../utils/pythonClient';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 
 export const TrainingSwitch: React.FC = () => {
   const theme = useTheme();
   const { isRunning, setRunning } = useTrainingStore();
-  const { selectedModel } = useModelStore();
-  const { isFirstTime, setFirstTime } = useWorkflowStore();
   const { showRightPanel } = useUIStore();
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
@@ -29,111 +25,175 @@ export const TrainingSwitch: React.FC = () => {
     message: '',
     severity: 'success',
   });
+  
+  const pollIntervalRef = useRef<number | null>(null);
+  const lastPollTimeRef = useRef<string>('');
+
+  useEffect(() => {
+    console.log('🔧 [TrainingSwitch] Component mounted, isRunning:', isRunning);
+    
+    if (isRunning) {
+      startPolling();
+    }
+    
+    return () => {
+      stopPolling();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isRunning) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  }, [isRunning]);
+
+  const startPolling = () => {
+    if (pollIntervalRef.current) return;
+    
+    console.log('📡 [TrainingSwitch] 开始轮询 Workers 消息...');
+    
+    pollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const result = await invoke<{ success: boolean; messages: any[]; poll_timestamp: string }>('poll_workers_messages', {
+          lastPollTime: lastPollTimeRef.current || undefined,
+        });
+        
+        if (result.success && result.messages.length > 0) {
+          console.log('📨 [TrainingSwitch] 收到新消息:', result.messages.length);
+          
+          // 更新轮询时间
+          lastPollTimeRef.current = result.poll_timestamp;
+          
+          // 处理每条消息
+          for (const msg of result.messages) {
+            await handleWorkersMessage(msg);
+          }
+        }
+      } catch (error) {
+        console.log('📡 [TrainingSwitch] 轮询失败:', error);
+      }
+    }, 10000); // 每 10 秒轮询一次
+  };
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      console.log('📡 [TrainingSwitch] 停止轮询...');
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const handleWorkersMessage = async (msg: any) => {
+    console.log('📨 [TrainingSwitch] 处理消息:', msg.message_type);
+    
+    switch (msg.message_type) {
+      case 'node_connection_request':
+        // AI 处理节点连接请求
+        await handleAiNodeConnection(msg);
+        break;
+        
+      case 'training_task':
+        // 收到训练任务
+        showRightPanel();
+        await emit('workflow-message', {
+          type: 'info',
+          content: `📬 收到训练任务\n\n来自节点: ${msg.from_node}\n内容: ${JSON.stringify(msg.content)}`,
+        });
+        break;
+        
+      case 'model_shard':
+        // 收到模型分片
+        showRightPanel();
+        await emit('workflow-message', {
+          type: 'info',
+          content: `📦 收到模型分片\n\n来自: ${msg.from_node}`,
+        });
+        break;
+        
+      default:
+        console.log('📨 [TrainingSwitch] 未知消息类型:', msg.message_type);
+    }
+  };
+
+  const handleAiNodeConnection = async (msg: any) => {
+    try {
+      showRightPanel();
+      
+      await emit('workflow-message', {
+        type: 'info',
+        content: `🤖 AI 正在分析节点连接请求...\n\n来自: ${msg.from_node}`,
+      });
+      
+      const result = await invoke<any>('handle_ai_node_connection', {
+        connectionRequest: {
+          from_node: msg.from_node,
+          from_node_info: msg.content?.node_info,
+          suggested_connection: msg.content?.suggested_connection,
+        },
+      });
+      
+      if (result.decision === 'accepted') {
+        await emit('workflow-message', {
+          type: 'success',
+          content: `✅ AI 决定接受连接\n\n🔗 ${result.from_node}\n💡 ${result.ai_reasoning}`,
+        });
+      } else {
+        await emit('workflow-message', {
+          type: 'warning',
+          content: `⏳ AI 建议延迟连接\n\n💡 ${result.ai_reasoning}`,
+        });
+      }
+    } catch (error) {
+      console.error('❌ [TrainingSwitch] AI 处理连接失败:', error);
+    }
+  };
 
   const handleToggle = async () => {
+    console.log('🎯 [TrainingSwitch] handleToggle, isRunning:', isRunning);
+    
     if (loading) return;
-
     setLoading(true);
+    
     try {
       if (isRunning) {
-        // 停止训练
-        const result = await pythonClient.stopTraining();
-        console.log('Training stopped:', result);
+        // 停止 - 停止轮询
+        console.log('📤 [TrainingSwitch] 停止...');
+        stopPolling();
         setRunning(false);
         setNotification({
           open: true,
-          message: '训练已停止',
+          message: '已停止，已断开 Workers 连接',
           severity: 'success',
         });
       } else {
-        // 开始训练前检查Python服务状态
-        const isHealthy = await pythonClient.healthCheck();
-        if (!isHealthy) {
-          setNotification({
-            open: true,
-            message: '无法连接到边缘服务器，请确保Python服务已启动',
-            severity: 'error',
-          });
-          setLoading(false);
-          return;
-        }
-
-        // 每次点击都启动文档驱动工作流（用于调试）
-        console.log('🚀 Starting document-driven workflow...');
-        
-        // 展开右侧对话框
+        // 启动 - 传送本地信息给 workers
+        console.log('📤 [TrainingSwitch] 启动...');
         showRightPanel();
         
-        // 发送欢迎消息到对话框
         await emit('workflow-message', {
           type: 'info',
-          content: '🎉 欢迎使用 Williw 去中心化算力平台！\n\n🤖 AI 助手正在为您进行配置...\n\n📋 配置内容包括：\n• 检测 GPU 可用性\n• 安装必要的依赖\n• 配置 Iroh P2P 网络\n• 初始化去中心化节点\n\n⏳ 请稍候，这个过程大约需要几分钟...',
+          content: '📡 正在向 Workers 广播本地信息...\n\n将传输：\n• 设备信息\n• GPU 状态\n• 网络配置\n\n同时开始轮询消息...',
+        });
+
+        const result = await invoke<{ success: boolean; message: string }>('upload_full_node_info_to_workers', {});
+        console.log('✅ [TrainingSwitch] 传输成功:', result);
+        
+        await emit('workflow-message', {
+          type: 'success',
+          content: `✅ ${result?.message || '本地信息已成功传送到 Workers 网络'}\n\n🔄 开始轮询消息...`,
         });
         
+        setRunning(true);
         setNotification({
           open: true,
-          message: '正在启动AI自主配置工作流，请查看右侧对话框...',
-          severity: 'info',
+          message: '✅ 已连接，正在轮询...',
+          severity: 'success',
         });
-        
-        try {
-          console.log('📤 Invoking start_document_driven_workflow...');
-          const result = await invoke<string>('start_document_driven_workflow', {
-            apiKey: '',
-            modelPath: selectedModel || '',
-          });
-          console.log('✅ Workflow started successfully:', result);
-          setFirstTime(false);
-          setNotification({
-            open: true,
-            message: '✅ AI自主配置工作流已启动！',
-            severity: 'success',
-          });
-          setLoading(false);
-          return;
-        } catch (error) {
-          console.error('❌ Failed to start workflow:', error);
-          setNotification({
-            open: true,
-            message: '❌ 工作流启动失败: ' + (error instanceof Error ? error.message : '未知错误'),
-            severity: 'error',
-          });
-        }
-
-        // 检查是否选择了模型（只在非首次运行时检查）
-        if (!selectedModel) {
-          setNotification({
-            open: true,
-            message: '请先选择一个模型',
-            severity: 'error',
-          });
-          setLoading(false);
-          return;
-        }
-
-        // 发送训练请求到Python服务
-        const result = await pythonClient.startTraining(selectedModel);
-        console.log('Training started:', result);
-
-        if (result.status === 'success') {
-          setRunning(true);
-          setNotification({
-            open: true,
-            message: isFirstTime
-              ? 'AI自主工作流已启动，请查看右侧对话框'
-              : `训练已启动，使用模型: ${selectedModel}`,
-            severity: 'success',
-          });
-        } else {
-          setNotification({
-            open: true,
-            message: `启动训练失败: ${result.message}`,
-            severity: 'error',
-          });
-        }
       }
     } catch (error) {
-      console.error('Error toggling training:', error);
+      console.error('❌ [TrainingSwitch] 失败:', error);
       setNotification({
         open: true,
         message: '操作失败: ' + (error instanceof Error ? error.message : '未知错误'),
@@ -144,32 +204,19 @@ export const TrainingSwitch: React.FC = () => {
     }
   };
 
-  const handleCloseNotification = () => {
-    setNotification({ ...notification, open: false });
-  };
-
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 16,
-        left: 16,
-        zIndex: 10,
-      }}
-    >
-      <Card
-        sx={{
-          background: alpha(theme.palette.background.paper, 0.9),
-          backdropFilter: 'blur(10px)',
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 1,
-          width: 56,
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
+    <Box sx={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
+      <Card sx={{
+        background: alpha(theme.palette.background.paper, 0.9),
+        backdropFilter: 'blur(10px)',
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 1,
+        width: 56,
+        height: 56,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
         <CardContent sx={{ p: 1 }}>
           <Switch
             checked={isRunning}
@@ -177,29 +224,16 @@ export const TrainingSwitch: React.FC = () => {
             disabled={loading}
             size="medium"
             sx={{
-              '& .MuiSwitch-switchBase.Mui-checked': {
-                color: '#4caf50',
-              },
-              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                backgroundColor: '#4caf50',
-              },
+              '& .MuiSwitch-switchBase.Mui-checked': { color: '#4caf50' },
+              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#4caf50' },
             }}
           />
         </CardContent>
       </Card>
       
-      {/* 通知提示 */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={5000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={handleCloseNotification}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={notification.open} autoHideDuration={5000} onClose={() => setNotification({ ...notification, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={notification.severity} sx={{ width: '100%' }}>
           {notification.message}
         </Alert>
       </Snackbar>

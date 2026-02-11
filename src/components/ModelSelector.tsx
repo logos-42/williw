@@ -17,6 +17,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { ModelConfig } from '../types';
 import { useModelStore } from '../store/modelStore';
 import { runInference, InferenceRequest } from '../services/inferenceService';
+import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
+import { useUIStore } from '../store/uiStore';
 
 export const ModelSelector: React.FC = () => {
   const theme = useTheme();
@@ -28,6 +31,7 @@ export const ModelSelector: React.FC = () => {
     setInferenceResult, 
     setInferenceLoading 
   } = useModelStore();
+  const { showRightPanel } = useUIStore();
 
   // 固定模型路径
   const models: ModelConfig[] = [
@@ -52,9 +56,22 @@ export const ModelSelector: React.FC = () => {
   };
 
   const handleInferenceRequest = async () => {
-    if (!selectedModel) {
-      setInferenceError('请先选择一个模型');
-      return;
+    // 使用默认模型
+    const modelId = selectedModel || 'lfm-2.5-1.2b-thinking';
+    
+    console.log('🚀 [ModelSelector] 启动AI配置工作流...模型:', modelId);
+    
+    // 展开右侧对话框
+    showRightPanel();
+    
+    // 发送启动消息
+    try {
+      await emit('workflow-message', {
+        type: 'info',
+        content: '🎉 欢迎使用 Williw！\n\n🤖 AI 助手正在为您配置系统...\n\n📋 AI将自动完成：\n• 检测系统环境\n• 安装必要依赖\n• 配置 Iroh P2P 网络\n• 初始化去中心化节点\n\n⏳ 请稍候，这个过程大约需要几分钟...',
+      });
+    } catch (e) {
+      console.warn('emit 失败，继续执行:', e);
     }
 
     setInferenceLoading(true);
@@ -62,49 +79,35 @@ export const ModelSelector: React.FC = () => {
     setInferenceResult(null);
 
     try {
-      // 获取选中的模型配置
-      const selectedModelConfig = models.find(m => m.id === selectedModel);
-      if (!selectedModelConfig?.path) {
-        throw new Error('模型路径未配置');
+      console.log('📤 [ModelSelector] 调用 start_document_driven_workflow...');
+      // 启动AI配置工作流 (注意：Rust命令使用驼峰命名)
+      const result = await invoke<string>('start_document_driven_workflow', { 
+        apiKey: '', 
+        modelPath: modelId 
+      });
+      console.log('✅ [ModelSelector] AI工作流已启动:', result);
+      
+      try {
+        await emit('workflow-message', {
+          type: 'success',
+          content: '✅ AI配置工作流已启动！\n\n请查看右侧对话框查看配置进度...',
+        });
+      } catch (e) {
+        console.warn('emit 成功消息失败:', e);
       }
-
-      console.log('开始自动配置GPU推理环境...');
       
-      // 调用GPU推理服务进行初始化（会自动启动服务器）
-      const inferenceRequest: InferenceRequest = {
-        model_path: selectedModelConfig.path,
-        input_text: '请介绍一下人工智能的发展历史。',
-        max_length: 100
-      };
-
-      const result = await runInference(inferenceRequest);
+    } catch (error) {
+      console.error('❌ [ModelSelector] 启动工作流失败:', error);
+      setInferenceError('启动工作流失败: ' + (error instanceof Error ? error.message : String(error)));
       
-      // 转换结果格式以匹配现有UI
-      const formattedResult = {
-        request_id: result.request_id,
-        selected_nodes: ['GPU_Node_1', 'GPU_Node_2'], // 模拟GPU节点
-        estimated_total_time: Math.round((result.processing_time || 0) * 1000),
-        result: result.result,
-        status: result.status,
-        model_path: selectedModelConfig.path
-      };
-
-      setInferenceResult(formattedResult);
-      console.log('GPU推理完成:', formattedResult);
-      
-      // 显示成功消息，提示用户可以开始对话
-      setTimeout(() => {
-        setInferenceError(''); // 清除任何错误消息
-      }, 2000);
-      
-    } catch (error: any) {
-      console.error('GPU推理失败:', error);
-      
-      // 如果是依赖问题，提供更友好的错误信息
-      if (error.message?.includes('依赖') || error.message?.includes('pip')) {
-        setInferenceError('正在安装Python依赖，请稍候...如果持续失败，请手动运行: pip install -r requirements.txt');
-      } else {
-        setInferenceError(`GPU推理失败: ${error.message || '未知错误'}。正在尝试自动配置环境...`);
+      // 同时显示到对话框
+      try {
+        await emit('workflow-message', {
+          type: 'error',
+          content: '❌ 启动失败: ' + (error instanceof Error ? error.message : String(error)),
+        });
+      } catch (e) {
+        console.warn('emit 错误消息失败:', e);
       }
     } finally {
       setInferenceLoading(false);

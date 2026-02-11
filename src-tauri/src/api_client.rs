@@ -466,4 +466,51 @@ impl WorkersApiClient {
             Err(_) => Ok(false),
         }
     }
+
+    /// 轮询 Workers 待处理消息
+    pub async fn poll_messages(&self, last_poll_time: Option<String>) -> Result<WorkersMessagesResponse> {
+        let url = if let Some(time) = last_poll_time {
+            format!("{}/api/messages?since={}", self.base_url, time)
+        } else {
+            format!("{}/api/messages", self.base_url)
+        };
+
+        let response = self.client
+            .get(&url)
+            .send()
+            .await?;
+
+        let messages_response: WorkersMessagesResponse = response.json().await?;
+        Ok(messages_response)
+    }
+}
+
+/// Workers 消息响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkersMessagesResponse {
+    pub success: bool,
+    pub messages: Vec<WorkersMessage>,
+    pub poll_timestamp: String,
+}
+
+/// Workers 消息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkersMessage {
+    pub id: String,
+    pub message_type: String,
+    pub from_node: String,
+    pub to_node: Option<String>,
+    pub content: serde_json::Value,
+    pub timestamp: String,
+    pub priority: String,
+}
+
+/// 节点连接请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeConnectionRequest {
+    pub request_id: String,
+    pub from_node: String,
+    pub from_node_info: NodeInfo,
+    pub suggested_connection: String,
+    pub metadata: serde_json::Value,
 }

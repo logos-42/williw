@@ -245,7 +245,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
       }}
     >
       <DialogTitle>
-        <Typography variant="h6">设置</Typography>
+        <Typography component="span" sx={{ fontSize: '1.25rem', fontWeight: 500 }}>
+          设置
+        </Typography>
       </DialogTitle>
 
       <DialogContent dividers sx={{ p: 0 }}>

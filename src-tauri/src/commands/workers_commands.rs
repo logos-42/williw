@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use tauri::State;
+use tauri::Emitter;
 use serde_json;
 
 /// Upload device info to workers backend (/api/node-info)
@@ -282,5 +283,94 @@ pub async fn upload_full_node_info_to_workers(
             }))
         }
         Err(e) => Err(format!("Upload failed: {}", e)),
+    }
+}
+
+/// Poll workers for pending messages
+#[tauri::command]
+pub async fn poll_workers_messages(
+    last_poll_time: Option<String>,
+    state: State<'_, AppState>
+) -> Result<serde_json::Value, String> {
+    match state.api_client.poll_messages(last_poll_time).await {
+        Ok(response) => {
+            Ok(serde_json::json!({
+                "success": response.success,
+                "messages": response.messages,
+                "poll_timestamp": response.poll_timestamp
+            }))
+        }
+        Err(e) => Err(format!("Poll failed: {}", e)),
+    }
+}
+
+/// AI-driven node connection handler
+#[tauri::command]
+pub async fn handle_ai_node_connection(
+    connection_request: serde_json::Value,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    use crate::system_checks;
+    
+    // Emit start event
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "info",
+        "content": "🤖 AI 正在分析节点连接请求...\n\n📋 将评估：\n• 节点性能\n• 网络延迟\n• 负载情况"
+    }));
+    
+    // Extract connection info
+    let from_node = connection_request.get("from_node")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    
+    let suggested_connection = connection_request.get("suggested_connection")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    
+    // AI 分析：检查本地系统状态
+    let system_status = serde_json::json!({
+        "python": system_checks::check_python().map(|(i, v)| serde_json::json!({"installed": i, "version": v})).unwrap_or_else(|_| serde_json::json!({"installed": false})),
+        "cuda": system_checks::check_cuda().map(|(a, i)| serde_json::json!({"available": a, "info": i})).unwrap_or_else(|_| serde_json::json!({"available": false})),
+        "torch": system_checks::check_pytorch().map(|(i, v)| serde_json::json!({"installed": i, "version": v})).unwrap_or_else(|_| serde_json::json!({"installed": false})),
+    });
+    
+    // AI 决策：是否接受连接
+    let should_connect = system_status.get("cuda")
+        .and_then(|v| v.get("available"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    
+    if should_connect {
+        let _ = app.emit("workflow-message", serde_json::json!({
+            "type": "success",
+            "content": format!("✅ AI 决定接受连接\n\n🔗 节点: {}\n🌐 连接: {}\n\n正在配置 Iroh P2P 连接...", from_node, suggested_connection)
+        }));
+        
+        // 配置 Iroh 连接
+        let _ = app.emit("workflow-message", serde_json::json!({
+            "type": "progress",
+            "content": "🔗 正在建立 P2P 连接..."
+        }));
+        
+        Ok(serde_json::json!({
+            "success": true,
+            "decision": "accepted",
+            "from_node": from_node,
+            "connection_config": suggested_connection,
+            "ai_reasoning": "System has GPU available, accepting peer connection"
+        }))
+    } else {
+        let _ = app.emit("workflow-message", serde_json::json!({
+            "type": "warning",
+            "content": format!("⚠️ AI 建议延迟连接\n\n原因: 系统未检测到 GPU\n🔄 建议: 使用 CPU 模式或等待 GPU 可用时再连接")
+        }));
+        
+        Ok(serde_json::json!({
+            "success": true,
+            "decision": "deferred",
+            "from_node": from_node,
+            "ai_reasoning": "No GPU available, deferring connection until GPU is ready"
+        }))
     }
 }

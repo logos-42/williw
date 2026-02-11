@@ -5,6 +5,7 @@ mod commands;
 mod state;
 mod events;
 mod api_client;
+mod system_checks;
 
 use tauri::Emitter;
 use tauri::Manager;
@@ -57,7 +58,6 @@ async fn main() {
             commands::download_default_model,
             commands::get_workflow_status,
             commands::start_document_driven_workflow,
-            commands::run_ai_setup,
             commands::check_setup_status,
             commands::start_gpu_inference_server,
             commands::test_external_api,
@@ -67,6 +67,8 @@ async fn main() {
             commands::toggle_external_api,
             commands::chat_with_external_api,
             commands::test_workflow_event,
+            commands::poll_workers_messages,
+            commands::handle_ai_node_connection,
         ])
         .setup(|app| {
             // Initialize event handlers

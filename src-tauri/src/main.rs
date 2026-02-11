@@ -48,8 +48,13 @@ async fn main() {
             commands::check_node_health_from_workers,
             commands::upload_full_node_info_to_workers,
             commands::start_gpu_server,
+            commands::stop_gpu_server,
             commands::check_gpu_server_status,
             commands::install_gpu_dependencies,
+            commands::check_deploy_status,
+            commands::check_python,
+            commands::install_dependencies,
+            commands::download_default_model,
             commands::get_workflow_status,
             commands::start_document_driven_workflow,
             commands::run_ai_setup,
@@ -61,6 +66,7 @@ async fn main() {
             commands::delete_external_api,
             commands::toggle_external_api,
             commands::chat_with_external_api,
+            commands::test_workflow_event,
         ])
         .setup(|app| {
             // Initialize event handlers

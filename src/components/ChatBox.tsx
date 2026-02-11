@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   TextField,
@@ -21,6 +22,9 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import InfoIcon from '@mui/icons-material/Info';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
 import { useModelStore } from '../store/modelStore';
 import { useWorkflowStore } from '../store/workflowStore';
 import { runInference, InferenceRequest } from '../services/inferenceService';
@@ -46,6 +50,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { inferenceResult, isInferenceLoading } = useModelStore();
   const { status, addMessage } = useWorkflowStore();
@@ -86,12 +91,15 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
 
   // 监听工作流消息事件
   useEffect(() => {
+    console.log('🔧 [ChatBox] Setting up workflow listeners...');
     let unlistenFn: any = null;
 
     const setupWorkflowListeners = async () => {
       try {
+        console.log('🔧 [ChatBox] Calling listen()...');
         // 监听工作流消息
         unlistenFn = await listen('workflow-message', (event: any) => {
+          console.log('📨 [ChatBox] Received workflow-message event:', event);
           const { type, content, progress } = event.payload as {
             type: string;
             content: string;
@@ -107,6 +115,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
             workflowProgress: progress,
           };
 
+          console.log('💬 [ChatBox] Adding workflow message:', workflowMessage);
           setMessages(prev => [...prev, workflowMessage]);
           addMessage({
             type: type as any,
@@ -115,15 +124,16 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
           });
         });
 
-        console.log('✅ Workflow listeners registered');
+        console.log('✅ [ChatBox] Workflow listeners registered successfully');
       } catch (error) {
-        console.error('Failed to setup workflow listeners:', error);
+        console.error('❌ [ChatBox] Failed to setup workflow listeners:', error);
       }
     };
 
     setupWorkflowListeners();
 
     return () => {
+      console.log('🔧 [ChatBox] Cleaning up workflow listeners...');
       if (unlistenFn) {
         unlistenFn();
       }
@@ -423,6 +433,56 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                 <div ref={messagesEndRef} />
                 </List>
               )}
+            </Box>
+
+            {/* 测试按钮区域 */}
+            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<BugReportIcon />}
+                onClick={async () => {
+                  console.log('🧪 [Test] Manually adding test message...');
+                  // 直接添加消息到对话框（不通过事件系统）
+                  const testMessage: ChatMessage = {
+                    id: `test-${Date.now()}`,
+                    content: '🧪 本地测试消息：如果看到这个消息，说明ChatBox渲染正常',
+                    sender: 'workflow',
+                    timestamp: new Date(),
+                    workflowType: 'info',
+                  };
+                  setMessages(prev => [...prev, testMessage]);
+                  
+                  // 尝试通过emit发送事件（用于测试Tauri事件系统）
+                  try {
+                    const { emit } = await import('@tauri-apps/api/event');
+                    await emit('workflow-message', {
+                      type: 'progress',
+                      content: '🧪 通过emit发送的测试消息',
+                      progress: 0.5,
+                    });
+                    console.log('✅ [Test] Event emitted successfully');
+                  } catch (e) {
+                    console.error('❌ [Test] Failed to emit event:', e);
+                  }
+                }}
+              >
+                测试消息
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={async () => {
+                  try {
+                    const result = await invoke<string>('test_workflow_event');
+                    console.log('🧪 [Test] Backend test result:', result);
+                  } catch (e) {
+                    console.error('❌ [Test] Backend test failed:', e);
+                  }
+                }}
+              >
+                测试后端事件
+              </Button>
             </Box>
 
             <Box sx={{ display: 'flex', gap: 1 }}>

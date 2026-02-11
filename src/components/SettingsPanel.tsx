@@ -480,6 +480,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                   <Button variant="outlined" onClick={checkDeployStatus}>
                     刷新状态
                   </Button>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={async () => {
+                      try {
+                        const result = await invoke<string>('test_workflow_event');
+                        console.log('Test workflow event:', result);
+                        alert('测试已启动，请查看右侧对话框');
+                      } catch (error) {
+                        console.error('Test failed:', error);
+                        alert('测试失败: ' + error);
+                      }
+                    }}
+                  >
+                    测试工作流事件
+                  </Button>
                 </Box>
               </Box>
 

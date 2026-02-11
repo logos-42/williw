@@ -1,5 +1,5 @@
 use crate::state::{AppState, ExternalApiConfig};
-use tauri::State;
+use tauri::{State, Emitter};
 use serde_json;
 use uuid::Uuid;
 
@@ -340,4 +340,44 @@ pub async fn chat_with_external_api(
         max_retries,
         last_error
     ))
+}
+
+/// 测试工作流事件发送
+#[tauri::command]
+pub async fn test_workflow_event(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    println!("🧪 [TEST] Testing workflow event emission...");
+    
+    // 立即发送测试消息
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "info",
+        "content": "🧪 测试消息：工作流事件系统正常工作！",
+        "step": "test",
+        "progress": 0.5,
+    }));
+    
+    // 在后台发送更多测试消息
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        for i in 1..=5 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let _ = app_handle.emit("workflow-message", serde_json::json!({
+                "type": "progress",
+                "content": format!("🧪 测试进度 {}/5", i),
+                "step": "test_progress",
+                "progress": i as f64 / 5.0,
+            }));
+        }
+        
+        // 发送完成消息
+        let _ = app_handle.emit("workflow-message", serde_json::json!({
+            "type": "success",
+            "content": "✅ 测试完成！事件系统工作正常。",
+            "step": "test_complete",
+            "progress": 1.0,
+        }));
+    });
+    
+    Ok("Test event sequence started".to_string())
 }

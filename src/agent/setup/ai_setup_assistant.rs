@@ -87,7 +87,7 @@ impl AISetupAssistant {
     pub fn new(api_key: String) -> Self {
         Self {
             api_key,
-            api_base: "https://api.deepseek.com".to_string(),
+            api_base: "https://api.deepseek.com/v1".to_string(),
             model: "deepseek-chat".to_string(),
             client: reqwest::Client::new(),
         }

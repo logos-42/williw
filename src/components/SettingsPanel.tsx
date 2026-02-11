@@ -151,10 +151,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const handleSaveExternalApi = async (config: Partial<ExternalApiConfig>) => {
     try {
       if (editingApiId) {
-        await invoke('update_external_api', { id: editingApiId, config });
-      } else {
-        await invoke('add_external_api', { config });
+        // 编辑模式：先删除旧的，再保存新的
+        await invoke('delete_external_api', { id: editingApiId });
       }
+      await invoke('save_external_api', { config });
       await loadExternalApis();
       setShowExternalApiForm(false);
       setEditingApiId(null);

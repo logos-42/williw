@@ -25,6 +25,7 @@ import { useModelStore } from '../store/modelStore';
 import { useWorkflowStore } from '../store/workflowStore';
 import { runInference, InferenceRequest } from '../services/inferenceService';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 
 interface ChatMessage {
   id: string;
@@ -177,23 +178,41 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
     setMessages(prev => [...prev, thinkingMessage]);
 
     try {
-      // 检查GPU服务器是否运行，如果没有则自动启动
-      const modelPath = 'D:\\AI\\去中心化训练\\test_models\\models--LiquidAI--LFM2.5-1.2B-Thinking\\snapshots\\1c9725ba97f047b37bcf53e44e9133ccf1f79333';
+      // 首先尝试使用外部 API
+      let result: { result?: string; error?: string } | null = null;
+      let useExternalApi = false;
       
-      const inferenceRequest: InferenceRequest = {
-        model_path: modelPath,
-        input_text: currentInput,
-        max_length: 150
-      };
+      try {
+        const externalResult = await invoke<{ success: boolean; message: string }>('chat_with_external_api', {
+          message: currentInput,
+        });
+        if (externalResult.success) {
+          result = { result: externalResult.message };
+          useExternalApi = true;
+        }
+      } catch (externalError) {
+        console.log('外部 API 不可用，回退到本地 GPU:', externalError);
+      }
+      
+      // 如果外部 API 失败或未配置，使用本地 GPU
+      if (!useExternalApi) {
+        const modelPath = 'D:\\AI\\去中心化训练\\test_models\\models--LiquidAI--LFM2.5-1.2B-Thinking\\snapshots\\1c9725ba97f047b37bcf53e44e9133ccf1f79333';
+        
+        const inferenceRequest: InferenceRequest = {
+          model_path: modelPath,
+          input_text: currentInput,
+          max_length: 150
+        };
 
-      const result = await runInference(inferenceRequest);
+        result = await runInference(inferenceRequest);
+      }
 
       // 移除思考中的消息并添加AI回复
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.id !== thinkingMessage.id);
         return [...filtered, {
           id: `ai-${Date.now()}`,
-          content: result.result || '抱歉，我无法生成回复。',
+          content: result?.result || '抱歉，我无法生成回复。',
           sender: 'assistant',
           timestamp: new Date(),
         }];
@@ -207,7 +226,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
         const filtered = prev.filter(msg => msg.id !== thinkingMessage.id);
         return [...filtered, {
           id: `error-${Date.now()}`,
-          content: `抱歉，出现了错误：${error.message || '未知错误'}。请确保GPU服务器正在运行。`,
+          content: `抱歉，出现了错误：${error.message || '未知错误'}。请确保GPU服务器正在运行或已配置外部 API。`,
           sender: 'assistant',
           timestamp: new Date(),
         }];

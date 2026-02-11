@@ -11,7 +11,6 @@ use tauri::Manager;
 use state::AppState;
 
 // Initialize logger
-#[macro_use]
 extern crate log;
 
 #[tokio::main]
@@ -47,6 +46,7 @@ async fn main() {
             commands::request_inference_from_workers,
             commands::reassign_node_from_workers,
             commands::check_node_health_from_workers,
+            commands::upload_full_node_info_to_workers,
             commands::start_gpu_server,
             commands::check_gpu_server_status,
             commands::install_gpu_dependencies,
@@ -55,6 +55,12 @@ async fn main() {
             commands::run_ai_setup,
             commands::check_setup_status,
             commands::start_gpu_inference_server,
+            commands::test_external_api,
+            commands::save_external_api,
+            commands::get_external_apis,
+            commands::delete_external_api,
+            commands::toggle_external_api,
+            commands::chat_with_external_api,
         ])
         .setup(|app| {
             // Initialize event handlers

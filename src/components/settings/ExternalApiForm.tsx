@@ -47,7 +47,7 @@ interface ExternalApiFormProps {
 
 const PROVIDER_CONFIGS: Record<ProviderType, { baseUrl: string; model: string }> = {
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.3' },
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
   anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-4.6-sonnet-20240229' },
   glm: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7' },
   kimichat: { baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi k2.5 thinking' },
@@ -70,7 +70,7 @@ export const ExternalApiForm: React.FC<ExternalApiFormProps> = ({
   const [formData, setFormData] = useState<Partial<ExternalApiConfig>>(
     editingApi || {
       provider: 'deepseek',
-      base_url: 'https://api.deepseek.com',
+      base_url: 'https://api.deepseek.com/v1',
       model: 'deepseek-chat',
       enabled: true,
     }

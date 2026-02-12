@@ -6,6 +6,9 @@ import { resolve } from "path";
 export default defineConfig(async () => ({
   plugins: [react()],
   
+  // Use relative paths for Tauri
+  base: "./",
+  
   // Set the root to src directory where index.html is located
   root: resolve(__dirname, "src"),
   

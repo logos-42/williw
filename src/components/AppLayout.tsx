@@ -8,7 +8,10 @@ import { LeftPanel } from './LeftPanel';
 import { RightPanel } from './RightPanel';
 import { useTrainingStore } from '../store/trainingStore';
 
+console.log('=== AppLayout loading ===')
+
 export const AppLayout: React.FC = () => {
+  console.log('=== AppLayout rendering ===')
   const { isSettingsOpen, openSettings, closeSettings } = useTrainingStore();
   const [splitPercentage, setSplitPercentage] = useState(70); // 左侧初始占比70%
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);

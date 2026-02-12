@@ -8,6 +8,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="error-log" style="color: red; padding: 20px; font-family: monospace;"></div>
+    <script>
+      window.addEventListener('error', function(e) {
+        document.getElementById('error-log').innerHTML += '<p>Error: ' + e.message + '</p>';
+        console.error('Global error:', e);
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        document.getElementById('error-log').innerHTML += '<p>Promise Error: ' + e.reason + '</p>';
+        console.error('Unhandled rejection:', e);
+      });
+    </script>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

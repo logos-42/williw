@@ -7,11 +7,11 @@
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "./dist"
+    "frontendDist": "../dist"
   },
   "app": {
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:8000"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: https://asset.localhost; connect-src ipc: http://ipc.localhost http://localhost:* https://localhost:*"
     },
     "windows": [
       {
@@ -23,7 +23,8 @@
         "resizable": true,
         "fullscreen": false,
         "hiddenTitle": false,
-        "titleBarStyle": "Visible"
+        "titleBarStyle": "Visible",
+        "devtools": true
       }
     ],
     "withGlobalTauri": false

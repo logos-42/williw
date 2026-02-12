@@ -16,7 +16,6 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { ModelConfig } from '../types';
 import { useModelStore } from '../store/modelStore';
-import { runInference, InferenceRequest } from '../services/inferenceService';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { useUIStore } from '../store/uiStore';

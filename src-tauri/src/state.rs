@@ -244,8 +244,10 @@ impl AppState {
             device_info: Arc::new(Mutex::new(Some(device_info))),
             api_keys: Arc::new(Mutex::new(vec![])),
             external_apis: Arc::new(Mutex::new(vec![])),
+            // Workers API URL - 通过环境变量配置，默认为 Cloudflare Workers
             api_client: crate::api_client::WorkersApiClient::new(
-                "https://williw.sirazede725.workers.dev".to_string()
+                std::env::var("WILLIW_WORKERS_URL")
+                    .unwrap_or_else(|_| "https://williw-worker-rust.yuanjieliu65.workers.dev".to_string())
             ),
             workflow_status: Arc::new(Mutex::new(WorkflowStatus::default())),
         }

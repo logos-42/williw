@@ -50,7 +50,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   // 外部 API 配置状态
   const [externalApis, setExternalApis] = useState<ExternalApiConfig[]>([]);
   const [editingApiId, setEditingApiId] = useState<string | null>(null);
-  const [showExternalApiForm, setShowExternalApiForm] = useState(false);
+  const [, setShowExternalApiForm] = useState(false);
 
   // AI 自动部署状态
   const [deployStatus, setDeployStatus] = useState<DeployStatus>({

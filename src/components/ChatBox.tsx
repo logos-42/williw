@@ -23,9 +23,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import InfoIcon from '@mui/icons-material/Info';
 import BugReportIcon from '@mui/icons-material/BugReport';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import { useModelStore } from '../store/modelStore';
 import { useWorkflowStore } from '../store/workflowStore';
 import { runInference, InferenceRequest } from '../services/inferenceService';
@@ -51,7 +48,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [isWorkflowRunning, setIsWorkflowRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { inferenceResult, isInferenceLoading } = useModelStore();
   const { status, addMessage } = useWorkflowStore();

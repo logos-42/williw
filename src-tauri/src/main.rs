@@ -7,6 +7,19 @@ mod events;
 mod api_client;
 mod system_checks;
 
+use commands::training_commands::{
+    start_training,
+    stop_training,
+    get_training_status,
+    get_training_stats,
+    ai_analyze_system,
+    ai_start_training,
+};
+use commands::workers_commands::{
+    poll_workers_messages,
+    handle_ai_node_connection,
+};
+
 use tauri::Emitter;
 use tauri::Manager;
 use state::AppState;
@@ -25,50 +38,14 @@ async fn main() {
         .manage(app_state)
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            commands::start_training,
-            commands::stop_training,
-            commands::get_training_status,
-            commands::select_model,
-            commands::get_available_models,
-            commands::get_device_info,
-            commands::get_training_stats,
-            commands::update_settings,
-            commands::get_settings,
-            commands::get_api_keys,
-            commands::create_api_key,
-            commands::delete_api_key,
-            commands::update_api_key_name,
-            commands::get_node_info,
-            commands::get_connected_peers,
-            commands::upload_device_info_to_workers,
-            commands::upload_model_selection_to_workers,
-            commands::upload_training_data_to_workers,
-            commands::test_workers_connection,
-            commands::request_inference_from_workers,
-            commands::reassign_node_from_workers,
-            commands::check_node_health_from_workers,
-            commands::upload_full_node_info_to_workers,
-            commands::start_gpu_server,
-            commands::stop_gpu_server,
-            commands::check_gpu_server_status,
-            commands::install_gpu_dependencies,
-            commands::check_deploy_status,
-            commands::check_python,
-            commands::install_dependencies,
-            commands::download_default_model,
-            commands::get_workflow_status,
-            commands::start_document_driven_workflow,
-            commands::check_setup_status,
-            commands::start_gpu_inference_server,
-            commands::test_external_api,
-            commands::save_external_api,
-            commands::get_external_apis,
-            commands::delete_external_api,
-            commands::toggle_external_api,
-            commands::chat_with_external_api,
-            commands::test_workflow_event,
-            commands::poll_workers_messages,
-            commands::handle_ai_node_connection,
+            start_training,
+            stop_training,
+            get_training_status,
+            get_training_stats,
+            ai_analyze_system,
+            ai_start_training,
+            poll_workers_messages,
+            handle_ai_node_connection,
         ])
         .setup(|app| {
             // Initialize event handlers

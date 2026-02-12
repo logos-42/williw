@@ -4,7 +4,6 @@ import {
   Switch,
   Card,
   CardContent,
-  Typography,
   useTheme,
   alpha,
   Snackbar,
@@ -168,29 +167,47 @@ export const TrainingSwitch: React.FC = () => {
           severity: 'success',
         });
       } else {
-        // 启动 - 传送本地信息给 workers
-        console.log('📤 [TrainingSwitch] 启动...');
+        // 启动 - 使用 AI 驱动的智能启动
+        console.log('📤 [TrainingSwitch] AI 智能启动...');
         showRightPanel();
         
         await emit('workflow-message', {
           type: 'info',
-          content: '📡 正在向 Workers 广播本地信息...\n\n将传输：\n• 设备信息\n• GPU 状态\n• 网络配置\n\n同时开始轮询消息...',
+          content: '🚀 AI: 开始智能分析系统并选择最佳算力策略...\n\n🤖 AI 将：\n1. 检测本地 GPU 和 Python 环境\n2. 评估算力资源\n3. 选择最优执行策略',
         });
 
-        const result = await invoke<{ success: boolean; message: string }>('upload_full_node_info_to_workers', {});
-        console.log('✅ [TrainingSwitch] 传输成功:', result);
+        // 调用 AI 驱动的启动命令
+        const result = await invoke<any>('ai_start_training', {});
+        console.log('✅ [TrainingSwitch] AI 启动结果:', result);
         
-        await emit('workflow-message', {
-          type: 'success',
-          content: `✅ ${result?.message || '本地信息已成功传送到 Workers 网络'}\n\n🔄 开始轮询消息...`,
-        });
-        
-        setRunning(true);
-        setNotification({
-          open: true,
-          message: '✅ 已连接，正在轮询...',
-          severity: 'success',
-        });
+        if (result.success) {
+          const strategy = result.strategy;
+          const strategyText = strategy === 'local_gpu' 
+            ? '🎮 策略: 本地 GPU 模式\n\nAI 检测到本地 GPU 可用，将使用本地算力进行训练。'
+            : '🌐 策略: Workers 分布式网络\n\nAI 检测到本地 GPU 不可用，将使用分布式网络算力。';
+          
+          await emit('workflow-message', {
+            type: 'success',
+            content: `✅ ${result.message}\n\n${strategyText}\n\n🔄 开始轮询消息...`,
+          });
+          
+          setRunning(true);
+          setNotification({
+            open: true,
+            message: `✅ ${strategy === 'local_gpu' ? '已启动本地 GPU 训练' : '已连接 Workers 网络'}`,
+            severity: 'success',
+          });
+        } else {
+          await emit('workflow-message', {
+            type: 'error',
+            content: `❌ 启动失败: ${result.message || '未知错误'}`,
+          });
+          setNotification({
+            open: true,
+            message: '启动失败: ' + (result.message || '未知错误'),
+            severity: 'error',
+          });
+        }
       }
     } catch (error) {
       console.error('❌ [TrainingSwitch] 失败:', error);

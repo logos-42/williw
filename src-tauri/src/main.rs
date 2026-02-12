@@ -19,6 +19,13 @@ use commands::workers_commands::{
     poll_workers_messages,
     handle_ai_node_connection,
 };
+use commands::node_commands::{
+    get_node_info,
+    get_connected_peers,
+};
+use commands::model_device_commands::{
+    get_device_info,
+};
 
 use tauri::Emitter;
 use tauri::Manager;
@@ -46,6 +53,9 @@ async fn main() {
             ai_start_training,
             poll_workers_messages,
             handle_ai_node_connection,
+            get_node_info,
+            get_connected_peers,
+            get_device_info,
         ])
         .setup(|app| {
             // Initialize event handlers

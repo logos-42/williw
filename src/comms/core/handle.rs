@@ -108,10 +108,10 @@ impl CommsHandle {
         // 初始化 QUIC 网关（用于实时通信）- 这是真实 iroh 节点的来源
         let quic: Option<Arc<QuicGateway>> = if let Some(bind) = config.quic_bind {
             let quic_bootstrap = config.quic_bootstrap.clone();
-            eprintln!("[Iroh DEBUG] 尝试创建 QuicGateway，bind: {}", bind);
+            log::info!("[Iroh] 尝试创建 QuicGateway，bind: {}", bind);
             match QuicGateway::new(bind).await {
                 Ok(gateway) => {
-                    eprintln!("[Iroh DEBUG] ✅ QuicGateway 创建成功！");
+                    log::info!("[Iroh] ✅ QuicGateway 创建成功！");
                     let gateway = Arc::new(gateway);
                     // 在异步上下文中处理连接
                     for addr in quic_bootstrap {
@@ -123,13 +123,13 @@ impl CommsHandle {
                     Some(gateway)
                 }
                 Err(e) => {
-                    eprintln!("[Iroh DEBUG] ❌ 创建 QUIC 网关失败: {}", e);
-                    eprintln!("[Iroh DEBUG] 💡 可能原因: 端口被占用、权限不足，或 iroh 库初始化错误");
+                    log::error!("[Iroh] ❌ 创建 QUIC 网关失败: {}", e);
+                    log::error!("[Iroh] 💡 可能原因: 端口被占用、权限不足，或 iroh 库初始化错误");
                     None
                 }
             }
         } else {
-            eprintln!("[Iroh DEBUG] quic_bind 未配置，使用后备节点 ID");
+            log::warn!("[Iroh] quic_bind 未配置，使用后备节点 ID");
             None
         };
 

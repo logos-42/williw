@@ -56,11 +56,12 @@ pub struct IrohConnectionManager {
 impl IrohConnectionManager {
     /// 创建新的连接管理器
     pub async fn new(config: IrohConnectionConfig) -> Result<Self> {
-        info!("🔗 初始化 iroh 连接管理器");
+        info!("🔗 初始化 iroh 连接管理器, bind_addr: {}", config.bind_addr);
         
-        // 创建iroh端点 - 使用正确的API
+        // 创建iroh端点 - 使用配置中的地址
+        let bind_addr = config.bind_addr.parse().unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap());
         let endpoint = Endpoint::builder()
-            .bind_addr_v4("0.0.0.0:0".parse().unwrap())
+            .bind_addr_v4(bind_addr)
             .alpns(vec![b"williw-p2p".to_vec()])  // 设置ALPN协议
             .bind()
             .await?;

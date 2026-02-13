@@ -26,6 +26,26 @@ use commands::node_commands::{
 use commands::model_device_commands::{
     get_device_info,
 };
+use commands::api_key_commands::{
+    get_api_keys,
+    create_api_key,
+    delete_api_key,
+    update_api_key_name,
+};
+use commands::external_api_commands::{
+    get_external_apis,
+    save_external_api,
+    delete_external_api,
+    test_external_api,
+    chat_with_external_api,
+};
+use commands::gpu_commands::{
+    check_deploy_status,
+    start_gpu_server,
+    stop_gpu_server,
+    install_dependencies,
+    download_default_model,
+};
 
 use tauri::Emitter;
 use tauri::Manager;
@@ -135,6 +155,20 @@ async fn main() {
             get_node_info,
             get_connected_peers,
             get_device_info,
+            get_api_keys,
+            create_api_key,
+            delete_api_key,
+            get_external_apis,
+            save_external_api,
+            delete_external_api,
+            test_external_api,
+            chat_with_external_api,
+            check_deploy_status,
+            start_gpu_server,
+            stop_gpu_server,
+            install_dependencies,
+            download_default_model,
+            update_api_key_name,
         ])
         .setup(|app| {
             // Initialize event handlers
@@ -179,47 +213,76 @@ async fn main() {
                     config.clone()
                 };
                 
-                // 创建配置，使用 CLI 参数或默认值
-                let mut app_config = williw::config::AppConfig::default();
+                // 尝试多次启动，使用不同端口
+                let mut last_error = None;
+                let ports_to_try = if let Some(port) = node_config.quic_port {
+                    vec![port]
+                } else {
+                    // 默认尝试多个端口
+                    vec![0, 9234, 9235, 9236, 9237, 9238, 9239, 9240]
+                };
                 
-                // 如果 CLI 参数指定了端口，使用 CLI 参数
-                if let Some(port) = node_config.quic_port {
+                for port in ports_to_try {
+                    // 创建配置
+                    let mut app_config = williw::config::AppConfig::default();
+                    
+                    // 如果端口为0，使用随机端口
+                    let actual_port = if port == 0 {
+                        // 使用随机可用端口
+                        9000 + (rand::random::<u16>() % 1000)
+                    } else {
+                        port
+                    };
+                    
                     app_config.comms.quic_bind = Some(std::net::SocketAddr::new(
                         std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
-                        port,
+                        actual_port,
                     ));
-                    log::info!("[AutoStart] Using CLI port: {}", port);
+                    
+                    log::info!("[AutoStart] Attempting to start on port {} (config: {:?})", actual_port, app_config.comms.quic_bind);
+                    
+                    match williw::Node::new(app_config).await {
+                        Ok(node) => {
+                            let node_id = node.comms.node_id().to_string();
+                            log::info!("[AutoStart] Node started with ID: {}", node_id);
+                            
+                            // 检查节点ID格式 - 如果是iroh-UUID格式，说明QuicGateway可能创建失败
+                            if node_id.starts_with("iroh-") {
+                                log::warn!("[AutoStart] ⚠️ Node ID is UUID format (iroh-UUID), QuicGateway may have failed to initialize!");
+                            } else {
+                                log::info!("[AutoStart] ✅ Using real iroh node ID on port {}: {}", actual_port, node_id);
+                            }
+                            
+                            *app_state.node.lock() = Some(node);
+                            
+                            // Update training status
+                            let mut status = app_state.training_status.lock();
+                            status.is_running = true;
+                            
+                            // Emit event to frontend
+                            let _ = app_handle.emit("node-started", serde_json::json!({
+                                "node_id": node_id,
+                                "port": actual_port
+                            }));
+                            
+                            // 成功启动，跳出循环
+                            break;
+                        }
+                        Err(e) => {
+                            log::warn!("[AutoStart] Failed to start on port {}: {}", actual_port, e);
+                            last_error = Some(e);
+                            // 继续尝试下一个端口
+                        }
+                    }
                 }
                 
-                log::info!("[AutoStart] Creating node with config: quic_bind={:?}", app_config.comms.quic_bind);
-                
-                match williw::Node::new(app_config).await {
-                    Ok(node) => {
-                        let node_id = node.comms.node_id().to_string();
-                        log::info!("[AutoStart] Node started with ID: {}", node_id);
-                        
-                        // 检查节点ID格式 - 如果是iroh-UUID格式，说明QuicGateway可能创建失败
-                        if node_id.starts_with("iroh-") {
-                            log::warn!("[AutoStart] ⚠️ Node ID is UUID format (iroh-UUID), QuicGateway may have failed to initialize!");
-                        } else {
-                            log::info!("[AutoStart] ✅ Using real iroh node ID: {}", node_id);
-                        }
-                        
-                        *app_state.node.lock() = Some(node);
-                        
-                        // Update training status
-                        let mut status = app_state.training_status.lock();
-                        status.is_running = true;
-                        
-                        // Emit event to frontend
-                        let _ = app_handle.emit("node-started", serde_json::json!({
-                            "node_id": node_id
-                        }));
-                    }
-                    Err(e) => {
-                        log::error!("[AutoStart] Failed to start node: {}", e);
+                // 检查节点是否成功启动
+                {
+                    let node_guard = app_state.node.lock();
+                    if node_guard.is_none() {
+                        log::error!("[AutoStart] ❌ All ports failed, node could not start");
                         let _ = app_handle.emit("node-error", serde_json::json!({
-                            "error": e.to_string()
+                            "error": last_error.map(|e| e.to_string()).unwrap_or_else(|| "All ports failed".to_string())
                         }));
                     }
                 }

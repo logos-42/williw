@@ -14,7 +14,7 @@ interface TrainingStore {
 }
 
 export const useTrainingStore = create<TrainingStore>((set) => ({
-  isRunning: false,  // 默认关闭，用户手动启动
+  isRunning: true, // 默认开启，这样 UI 显示节点已启动
   isSettingsOpen: false,
   trainingStatus: null,
   

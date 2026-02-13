@@ -12,7 +12,7 @@ import {
 import { useTrainingStore } from '../store/trainingStore';
 import { useUIStore } from '../store/uiStore';
 import { invoke } from '@tauri-apps/api/core';
-import { emit } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 
 export const TrainingSwitch: React.FC = () => {
   const theme = useTheme();
@@ -27,6 +27,57 @@ export const TrainingSwitch: React.FC = () => {
   
   const pollIntervalRef = useRef<number | null>(null);
   const lastPollTimeRef = useRef<string>('');
+
+  // 监听后端的节点启动事件
+  useEffect(() => {
+    const setupListener = async () => {
+      try {
+        const unlisten = await listen('node-started', (event: any) => {
+          console.log('🎉 [TrainingSwitch] 节点已启动:', event.payload);
+          setRunning(true);
+          setNotification({
+            open: true,
+            message: `✅ P2P 节点已启动: ${event.payload.node_id?.substring(0, 8)}...`,
+            severity: 'success',
+          });
+        });
+        return unlisten;
+      } catch (e) {
+        console.log('监听 node-started 失败:', e);
+        return null;
+      }
+    };
+    
+    const unlistenPromise = setupListener();
+    
+    // 监听错误事件
+    const setupErrorListener = async () => {
+      try {
+        const unlisten = await listen('node-error', (event: any) => {
+          console.error('❌ [TrainingSwitch] 节点启动失败:', event.payload);
+          setNotification({
+            open: true,
+            message: `❌ 节点启动失败: ${event.payload.error}`,
+            severity: 'error',
+          });
+        });
+        return unlisten;
+      } catch (e) {
+        return null;
+      }
+    };
+    
+    const unlistenErrorPromise = setupErrorListener();
+    
+    return () => {
+      unlistenPromise.then(unlisten => {
+        if (unlisten) unlisten();
+      });
+      unlistenErrorPromise.then(unlisten => {
+        if (unlisten) unlisten();
+      });
+    };
+  }, []);
 
   useEffect(() => {
     console.log('🔧 [TrainingSwitch] Component mounted, isRunning:', isRunning);

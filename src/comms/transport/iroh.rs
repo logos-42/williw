@@ -402,4 +402,9 @@ impl QuicGateway {
             Err(_) => false,
         }
     }
+
+    /// 获取真实的 iroh 节点 ID
+    pub fn node_id(&self) -> String {
+        self.connection_manager.node_id()
+    }
 }

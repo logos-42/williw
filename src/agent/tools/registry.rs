@@ -333,6 +333,8 @@ impl From<ToolMetadata> for ToolDefinition {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    use async_trait::async_trait;
+    use crate::agent::tools::{ToolCategory, ToolStatus, ToolPriority};
 
     // Mock 工具用于测试
     struct MockTool {
@@ -380,7 +382,7 @@ mod tests {
                 name: "Test Tool".to_string(),
                 description: "A test tool".to_string(),
                 category: ToolCategory::Other,
-                priority: super::ToolPriority::Low,
+                priority: ToolPriority::Low,
                 status: ToolStatus::Available,
                 version: "1.0.0".to_string(),
                 author: "Test".to_string(),
@@ -407,7 +409,7 @@ mod tests {
                 name: "Test Tool".to_string(),
                 description: "A test tool".to_string(),
                 category: ToolCategory::Other,
-                priority: super::ToolPriority::Low,
+                priority: ToolPriority::Low,
                 status: ToolStatus::Available,
                 version: "1.0.0".to_string(),
                 author: "Test".to_string(),

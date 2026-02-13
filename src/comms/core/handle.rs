@@ -5,6 +5,7 @@
 use anyhow::{anyhow, Result};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use uuid::Uuid;
 // Stub iroh types for compatibility
 #[derive(Clone)]
 pub struct Endpoint;
@@ -99,23 +100,15 @@ pub struct CommsHandle {
 
 impl CommsHandle {
     pub async fn new(config: CommsConfig) -> Result<Self> {
-        // Stub implementation
-        let peer_id = "stub-peer-id".to_string();
-        println!("[Iroh] 节点 ID: {}", peer_id);
-
-        let endpoint = Endpoint;
-
         // 创建 gossip 消息通道
         let (gossip_tx, gossip_rx) = mpsc::channel(1024);
         // 创建事件通道
         let (event_tx, event_rx) = mpsc::channel::<IrohEvent>(1024);
 
-        // 初始化 QUIC 网关（用于实时通信）
+        // 初始化 QUIC 网关（用于实时通信）- 这是真实 iroh 节点的来源
         let quic: Option<Arc<QuicGateway>> = if let Some(bind) = config.quic_bind {
             let quic_bootstrap = config.quic_bootstrap.clone();
-            match tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(QuicGateway::new(bind))
-            }) {
+            match QuicGateway::new(bind).await {
                 Ok(gateway) => {
                     let gateway = Arc::new(gateway);
                     // 在异步上下文中处理连接
@@ -127,11 +120,27 @@ impl CommsHandle {
                     }
                     Some(gateway)
                 }
-                Err(_) => None,
+                Err(e) => {
+                    println!("[Iroh] 创建 QUIC 网关失败: {}, 使用后备节点 ID", e);
+                    None
+                }
             }
         } else {
             None
         };
+
+        // 从 QuicGateway 获取真实的 iroh 节点 ID，或使用 UUID 作为后备
+        let peer_id = if let Some(ref gateway) = quic {
+            let real_node_id = gateway.node_id();
+            println!("[Iroh] 真实节点 ID: {}", real_node_id);
+            real_node_id
+        } else {
+            let fallback_id = format!("iroh-{}", Uuid::new_v4());
+            println!("[Iroh] 后备节点 ID: {}", fallback_id);
+            fallback_id
+        };
+
+        let endpoint = Endpoint;
 
         // 启动 gossip 接收任务（简化实现）
         let _accept_endpoint = endpoint.clone();

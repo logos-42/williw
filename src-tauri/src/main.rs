@@ -100,6 +100,9 @@ async fn main() {
                     }
                     Err(e) => {
                         log::error!("[AutoStart] Failed to start node: {}", e);
+                        let _ = app_handle.emit("node-error", serde_json::json!({
+                            "error": e.to_string()
+                        }));
                     }
                 }
             });

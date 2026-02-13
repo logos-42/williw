@@ -250,7 +250,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
         </Typography>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 0 }}>
+      <DialogContent dividers sx={{ p: 0, overflow: 'hidden' }}>
         <Tabs
           value={tabValue}
           onChange={(_, newValue) => setTabValue(newValue)}
@@ -261,9 +261,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
           <Tab label="AI 部署" />
         </Tabs>
 
-        {/* Tab 0: API 密钥管理 */}
-        {tabValue === 0 && (
-          <Box sx={{ p: 3 }}>
+        {/* Tab 内容容器 - 固定高度，内部滚动 */}
+        <Box sx={{ 
+          height: '400px', 
+          overflow: 'auto',
+          overflowX: 'hidden',
+        }}>
+          {/* Tab 0: API 密钥管理 */}
+          {tabValue === 0 && (
+            <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">API 密钥管理</Typography>
               <Button variant="contained" color="primary" onClick={() => setShowCreateDialog(true)}>
@@ -515,6 +521,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             </Grid>
           </Grid>
         )}
+        </Box>
       </DialogContent>
 
       <DialogActions>

@@ -413,6 +413,7 @@ impl Default for ToolExecutorBuilder {
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use crate::agent::tools::{ToolCategory, ToolStatus};
 
     // Mock 工具执行器用于测试
     struct MockTool {
@@ -459,7 +460,7 @@ mod tests {
                 id: "mock_tool".to_string(),
                 name: "Mock Tool".to_string(),
                 description: "A mock tool for testing".to_string(),
-                category: super::ToolCategory::Other,
+                category: ToolCategory::Other,
                 priority: ToolPriority::Low,
                 status: ToolStatus::Available,
                 version: "1.0.0".to_string(),

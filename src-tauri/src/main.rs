@@ -29,17 +29,96 @@ use commands::model_device_commands::{
 
 use tauri::Emitter;
 use tauri::Manager;
-use state::AppState;
+use state::{AppState, CliArgsStore, NodeConfig};
 
 // Initialize logger
 extern crate log;
 
+/// 解析命令行参数
+fn parse_cli_args() -> CliArgsStore {
+    let args: Vec<String> = std::env::args().collect();
+    let mut cli_args = CliArgsStore {
+        auto_start: true, // 默认自动启动
+        node_id: None,
+        quic_port: None,
+    };
+    
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--auto-start" => {
+                cli_args.auto_start = true;
+                i += 1;
+            }
+            "--no-auto-start" => {
+                cli_args.auto_start = false;
+                i += 1;
+            }
+            "--node-id" => {
+                if i + 1 < args.len() {
+                    cli_args.node_id = args[i + 1].parse().ok();
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--quic-port" => {
+                if i + 1 < args.len() {
+                    cli_args.quic_port = args[i + 1].parse().ok();
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            "--help" | "-h" => {
+                println!("Williw P2P Desktop App");
+                println!("Usage: williw-desktop [OPTIONS]");
+                println!("");
+                println!("Options:");
+                println!("  --auto-start       自动启动 iroh 节点 (默认)");
+                println!("  --no-auto-start    不自动启动 iroh 节点");
+                println!("  --node-id <id>     指定节点 ID");
+                println!("  --quic-port <port> 指定 QUIC 端口");
+                println!("  --help, -h         显示此帮助信息");
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    
+    cli_args
+}
+
 #[tokio::main]
 async fn main() {
-    // Initialize logger
-    env_logger::init();
+    // 解析命令行参数
+    let cli_args = parse_cli_args();
+    
+    // Initialize logger - enable info level by default for GUI app
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .init();
+    
+    log::info!("[CLI] Parsed arguments: auto_start={}, node_id={:?}, quic_port={:?}", 
+        cli_args.auto_start, cli_args.node_id, cli_args.quic_port);
     
     let app_state = AppState::new().await;
+    
+    // 将 CLI 参数保存到 app_state 中，供后续使用
+    {
+        let mut cli_args_store = app_state.cli_args.lock();
+        *cli_args_store = Some(cli_args.clone());
+    }
+    
+    // 保存 CLI 参数到 app_state 的 node_config 中
+    {
+        let mut node_config = app_state.node_config.lock();
+        if let Some(node_id) = cli_args.node_id {
+            node_config.node_id = Some(node_id);
+        }
+        if let Some(port) = cli_args.quic_port {
+            node_config.quic_port = Some(port);
+        }
+    }
 
     tauri::Builder::default()
         .manage(app_state)
@@ -61,10 +140,24 @@ async fn main() {
             // Initialize event handlers
             events::setup_event_handlers(app.handle().clone())?;
 
-            // Auto-start iroh P2P node on app startup
+            // Auto-start iroh P2P node on app startup (根据 CLI 参数决定)
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let app_state = app_handle.state::<AppState>();
+                
+                // 从 app_state 获取 CLI 参数
+                let cli_args = {
+                    let args_guard = app_state.cli_args.lock();
+                    args_guard.clone()
+                };
+                
+                // 检查是否应该自动启动
+                let should_auto_start = cli_args.map(|args| args.auto_start).unwrap_or(true);
+                
+                if !should_auto_start {
+                    log::info!("[AutoStart] Skipping auto-start due to --no-auto-start flag");
+                    return;
+                }
                 
                 // Wait a bit for app to fully initialize
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -80,8 +173,25 @@ async fn main() {
                 
                 log::info!("[AutoStart] Starting iroh P2P node...");
                 
-                // Create default config
-                let app_config = williw::config::AppConfig::default();
+                // 从 app_state 获取 CLI 参数配置
+                let node_config = {
+                    let config = app_state.node_config.lock();
+                    config.clone()
+                };
+                
+                // 创建配置，使用 CLI 参数或默认值
+                let mut app_config = williw::config::AppConfig::default();
+                
+                // 如果 CLI 参数指定了端口，使用 CLI 参数
+                if let Some(port) = node_config.quic_port {
+                    app_config.comms.quic_bind = Some(std::net::SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                        port,
+                    ));
+                    log::info!("[AutoStart] Using CLI port: {}", port);
+                }
+                
+                log::info!("[AutoStart] Creating node with config: quic_bind={:?}", app_config.comms.quic_bind);
                 
                 match williw::Node::new(app_config).await {
                     Ok(node) => {
@@ -202,24 +312,44 @@ async fn main() {
                                 peers,
                             })
                         } else {
+                            println!("[AutoUpload] ⚠️ Node not running - iroh_node is None");
                             None
                         }
                     };
                     
-                    // Upload to workers
+                    // Upload to workers - only if node is running
                     if let Some(device_info) = device_info {
-                        println!("[AutoUpload] Uploading node info: CPU cores={}, Memory={}GB, GPU={:?}", 
-                            device_info.cpu_cores, device_info.total_memory_gb, device_info.gpu_type);
-                        match app_state.api_client.upload_full_node_info(device_info, iroh_node).await {
-                            Ok(response) => {
-                                if response.success {
-                                    println!("[AutoUpload] ✅ Node info uploaded successfully");
-                                } else {
-                                    println!("[AutoUpload] ❌ Upload failed: {}", response.message);
+                        if iroh_node.is_some() {
+                            println!("[AutoUpload] Uploading WITH iroh node info: CPU cores={}, Memory={}GB, GPU={:?}", 
+                                device_info.cpu_cores, device_info.total_memory_gb, device_info.gpu_type);
+                            match app_state.api_client.upload_full_node_info(device_info, iroh_node).await {
+                                Ok(response) => {
+                                    if response.success {
+                                        println!("[AutoUpload] ✅ Node info uploaded successfully");
+                                    } else {
+                                        println!("[AutoUpload] ❌ Upload failed: {}", response.message);
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("[AutoUpload] ❌ Upload error: {:?}", e);
                                 }
                             }
-                            Err(e) => {
-                                println!("[AutoUpload] ❌ Upload error: {:?}", e);
+                        } else {
+                            // Node not running - only upload device info without iroh node
+                            println!("[AutoUpload] ⚠️ Node not running - uploading device info only (no iroh node info)");
+                            println!("[AutoUpload] 💡 Please start the node using the toggle switch to enable full node info upload");
+                            // Still upload device info but mark node as not running
+                            match app_state.api_client.upload_full_node_info(device_info, None).await {
+                                Ok(response) => {
+                                    if response.success {
+                                        println!("[AutoUpload] ✅ Device info uploaded (node not running)");
+                                    } else {
+                                        println!("[AutoUpload] ❌ Upload failed: {}", response.message);
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("[AutoUpload] ❌ Upload error: {:?}", e);
+                                }
                             }
                         }
                     } else {

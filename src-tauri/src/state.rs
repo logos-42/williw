@@ -151,6 +151,21 @@ impl Default for WorkflowStatus {
     }
 }
 
+/// 命令行参数结构 (存储在 AppState 中)
+#[derive(Debug, Clone, Default)]
+pub struct CliArgsStore {
+    pub auto_start: bool,
+    pub node_id: Option<usize>,
+    pub quic_port: Option<u16>,
+}
+
+/// 节点配置 (用于创建节点时使用)
+#[derive(Debug, Clone, Default)]
+pub struct NodeConfig {
+    pub node_id: Option<usize>,
+    pub quic_port: Option<u16>,
+}
+
 /// Global application state
 pub struct AppState {
     pub settings: Arc<Mutex<AppSettings>>,
@@ -162,6 +177,10 @@ pub struct AppState {
     pub external_apis: Arc<Mutex<Vec<ExternalApiConfig>>>,
     pub api_client: crate::api_client::WorkersApiClient,
     pub workflow_status: Arc<Mutex<WorkflowStatus>>,
+    // 命令行参数存储
+    pub cli_args: Arc<Mutex<Option<CliArgsStore>>>,
+    // 节点配置
+    pub node_config: Arc<Mutex<NodeConfig>>,
 }
 
 impl AppState {
@@ -251,6 +270,10 @@ impl AppState {
                     .unwrap_or_else(|_| "https://williw-worker-rust.yuanjieliu65.workers.dev".to_string())
             ),
             workflow_status: Arc::new(Mutex::new(WorkflowStatus::default())),
+            // 命令行参数初始为 None，会在 main.rs 中被设置
+            cli_args: Arc::new(Mutex::new(None)),
+            // 节点配置初始为默认值
+            node_config: Arc::new(Mutex::new(NodeConfig::default())),
         }
     }
 

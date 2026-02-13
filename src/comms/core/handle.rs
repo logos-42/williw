@@ -121,22 +121,23 @@ impl CommsHandle {
                     Some(gateway)
                 }
                 Err(e) => {
-                    println!("[Iroh] 创建 QUIC 网关失败: {}, 使用后备节点 ID", e);
+                    log::error!("[Iroh] 创建 QUIC 网关失败: {}, 使用后备节点 ID", e);
                     None
                 }
             }
         } else {
+            log::warn!("[Iroh] quic_bind 未配置，使用后备节点 ID");
             None
         };
 
         // 从 QuicGateway 获取真实的 iroh 节点 ID，或使用 UUID 作为后备
         let peer_id = if let Some(ref gateway) = quic {
             let real_node_id = gateway.node_id();
-            println!("[Iroh] 真实节点 ID: {}", real_node_id);
+            log::info!("[Iroh] ✅ 真实节点 ID: {}", real_node_id);
             real_node_id
         } else {
             let fallback_id = format!("iroh-{}", Uuid::new_v4());
-            println!("[Iroh] 后备节点 ID: {}", fallback_id);
+            log::warn!("[Iroh] ⚠️ 后备节点 ID: {}", fallback_id);
             fallback_id
         };
 

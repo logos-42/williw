@@ -4,6 +4,7 @@
 //! 使用 iroh 作为通讯模块，nori 作为加密手段
 
 #![allow(non_snake_case)]
+#![allow(dead_code)]
 
 // 核心模块
 pub mod device;

@@ -61,6 +61,49 @@ async fn main() {
             // Initialize event handlers
             events::setup_event_handlers(app.handle().clone())?;
 
+            // Auto-start iroh P2P node on app startup
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let app_state = app_handle.state::<AppState>();
+                
+                // Wait a bit for app to fully initialize
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                
+                // Check if node already exists
+                {
+                    let node_guard = app_state.node.lock();
+                    if node_guard.is_some() {
+                        log::info!("[AutoStart] Node already running");
+                        return;
+                    }
+                }
+                
+                log::info!("[AutoStart] Starting iroh P2P node...");
+                
+                // Create default config
+                let app_config = williw::config::AppConfig::default();
+                
+                match williw::Node::new(app_config).await {
+                    Ok(node) => {
+                        let node_id = node.comms.node_id().to_string();
+                        log::info!("[AutoStart] Node started with ID: {}", node_id);
+                        *app_state.node.lock() = Some(node);
+                        
+                        // Update training status
+                        let mut status = app_state.training_status.lock();
+                        status.is_running = true;
+                        
+                        // Emit event to frontend
+                        let _ = app_handle.emit("node-started", serde_json::json!({
+                            "node_id": node_id
+                        }));
+                    }
+                    Err(e) => {
+                        log::error!("[AutoStart] Failed to start node: {}", e);
+                    }
+                }
+            });
+
             // Start background task to refresh device info every minute
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

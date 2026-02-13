@@ -101,6 +101,7 @@ pub struct DeviceInfo {
     pub gpu_memory_total: Option<f64>,  // GB
     pub gpu_memory_used: Option<f64>,  // GB
     pub cpu_cores: u32,
+    pub cpu_usage: f64,  // 0-100, CPU使用率
     pub total_memory_gb: f64,
     pub battery_level: Option<f64>,  // 0-100
     pub is_charging: Option<bool>,
@@ -256,8 +257,12 @@ impl AppState {
     fn get_device_info_internal() -> DeviceInfo {
         let mut sys = sysinfo::System::new_all();
         sys.refresh_all();
+        // 需要稍等一下再获取 CPU 使用率，否则可能是 0
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        sys.refresh_cpu_all();
 
         let cpu_cores = sys.cpus().len() as u32;
+        let cpu_usage = sys.global_cpu_usage() as f64;
         let total_memory = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
 
         // GPU info (使用真实的系统检测)
@@ -283,6 +288,7 @@ impl AppState {
             gpu_memory_total,
             gpu_memory_used,
             cpu_cores,
+            cpu_usage,
             total_memory_gb: total_memory,
             battery_level,
             is_charging,

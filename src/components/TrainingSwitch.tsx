@@ -157,9 +157,17 @@ export const TrainingSwitch: React.FC = () => {
     
     try {
       if (isRunning) {
-        // 停止 - 停止轮询
+        // 停止 - 停止轮询和 iroh 节点
         console.log('📤 [TrainingSwitch] 停止...');
         stopPolling();
+        
+        // 调用后端停止训练节点
+        try {
+          await invoke('stop_training');
+        } catch (e) {
+          console.log('停止节点:', e);
+        }
+        
         setRunning(false);
         setNotification({
           open: true,

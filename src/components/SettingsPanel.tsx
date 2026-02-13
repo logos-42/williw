@@ -240,7 +240,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
           background: alpha(theme.palette.background.paper, 0.95),
           backdropFilter: 'blur(20px)',
           border: `1px solid ${theme.palette.divider}`,
-          maxHeight: '90vh',
+          height: '600px',
+          maxHeight: '600px',
         },
       }}
     >
@@ -250,11 +251,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
         </Typography>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 0, overflow: 'hidden' }}>
+      <DialogContent dividers sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Tabs
           value={tabValue}
           onChange={(_, newValue) => setTabValue(newValue)}
-          sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
+          sx={{ borderBottom: 1, borderColor: 'divider', px: 2, flexShrink: 0 }}
         >
           <Tab label="API 密钥" />
           <Tab label="外部 API" />
@@ -263,7 +264,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
         {/* Tab 内容容器 - 固定高度，内部滚动 */}
         <Box sx={{ 
-          height: '400px', 
+          flex: 1,
           overflow: 'auto',
           overflowX: 'hidden',
         }}>

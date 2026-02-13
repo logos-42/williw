@@ -435,13 +435,25 @@ impl WorkersApiClient {
         iroh_node: Option<IrohNodeInfo>,
     ) -> Result<ApiResponse> {
         let device_id = self.get_device_id();
+        
+        // 使用真实的 iroh 节点 ID（如果可用），否则使用 device_id
+        let node_id = if let Some(ref iroh) = iroh_node {
+            iroh.node_id.clone()
+        } else {
+            device_id.clone()
+        };
+        
+        // 创建包含真实节点 ID 的 metadata
+        let mut metadata = self.get_device_metadata();
+        metadata.node_id = Some(node_id.clone());
+        
         let payload = FullNodeInfoPayload {
             device_id: device_id.clone(),
             timestamp: chrono::Utc::now().to_rfc3339(),
-            node_id: device_id,
+            node_id,
             iroh_node,
             device_info,
-            metadata: self.get_device_metadata(),
+            metadata,
         };
 
         let response = self

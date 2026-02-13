@@ -124,7 +124,7 @@ async fn main() {
                 let app_state = app_handle.state::<AppState>();
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
                 
-                log::info!("[AutoUpload] Starting automatic node info upload task (every 30s)");
+                println!("[AutoUpload] Starting automatic node info upload task (every 30s)");
                 
                 loop {
                     interval.tick().await;
@@ -138,8 +138,10 @@ async fn main() {
                     // Get iroh node info if available
                     let iroh_node = {
                         let node_guard = app_state.node.lock();
+                        println!("[AutoUpload] Checking node state: exists={}", node_guard.is_some());
                         if let Some(node) = node_guard.as_ref() {
                             let node_id = node.comms.node_id().to_string();
+                            println!("[AutoUpload] Node ID from comms: {}", node_id);
                             let capabilities = node.device_manager.get();
                             let stats = node.stats.lock().unwrap();
                             let (primary_peers, backup_peers) = node.topology.neighbor_sets();
@@ -204,22 +206,22 @@ async fn main() {
                     
                     // Upload to workers
                     if let Some(device_info) = device_info {
-                        log::info!("[AutoUpload] Uploading node info: CPU cores={}, Memory={}GB, GPU={:?}", 
+                        println!("[AutoUpload] Uploading node info: CPU cores={}, Memory={}GB, GPU={:?}", 
                             device_info.cpu_cores, device_info.total_memory_gb, device_info.gpu_type);
                         match app_state.api_client.upload_full_node_info(device_info, iroh_node).await {
                             Ok(response) => {
                                 if response.success {
-                                    log::info!("[AutoUpload] Node info uploaded successfully");
+                                    println!("[AutoUpload] ✅ Node info uploaded successfully");
                                 } else {
-                                    log::warn!("[AutoUpload] Upload failed: {}", response.message);
+                                    println!("[AutoUpload] ❌ Upload failed: {}", response.message);
                                 }
                             }
                             Err(e) => {
-                                log::error!("[AutoUpload] Upload error: {:?} - {}", e, e);
+                                println!("[AutoUpload] ❌ Upload error: {:?}", e);
                             }
                         }
                     } else {
-                        log::warn!("[AutoUpload] No device info available, skipping upload");
+                        println!("[AutoUpload] ⚠️ No device info available, skipping upload");
                     }
                 }
             });

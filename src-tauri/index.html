@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Williw - Decentralized Training</title>
+    <script type="module" crossorigin src="./assets/index-CtdBVT-V.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Qt0Ttgl6.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="error-log" style="color: red; padding: 20px; font-family: monospace;"></div>
+    <script>
+      window.addEventListener('error', function(e) {
+        document.getElementById('error-log').innerHTML += '<p>Error: ' + e.message + '</p>';
+        console.error('Global error:', e);
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        document.getElementById('error-log').innerHTML += '<p>Promise Error: ' + e.reason + '</p>';
+        console.error('Unhandled rejection:', e);
+      });
+    </script>
+  </body>
+</html>

@@ -197,6 +197,14 @@ async fn main() {
                     Ok(node) => {
                         let node_id = node.comms.node_id().to_string();
                         log::info!("[AutoStart] Node started with ID: {}", node_id);
+                        
+                        // 检查节点ID格式 - 如果是iroh-UUID格式，说明QuicGateway可能创建失败
+                        if node_id.starts_with("iroh-") {
+                            log::warn!("[AutoStart] ⚠️ Node ID is UUID format (iroh-UUID), QuicGateway may have failed to initialize!");
+                        } else {
+                            log::info!("[AutoStart] ✅ Using real iroh node ID: {}", node_id);
+                        }
+                        
                         *app_state.node.lock() = Some(node);
                         
                         // Update training status

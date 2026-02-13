@@ -350,10 +350,15 @@ impl QuicGateway {
         let connection_manager = Arc::new(IrohConnectionManager::new(config).await?);
         let received_messages = Arc::new(RwLock::new(Vec::new()));
         
-        Ok(Self {
+        let gateway = Self {
             connection_manager,
             received_messages,
-        })
+        };
+        
+        // 输出真实的 iroh 节点 ID
+        info!("🎯 QuicGateway 创建完成，节点ID: {}", gateway.node_id());
+        
+        Ok(gateway)
     }
 
     pub async fn connect(&self, addr: std::net::SocketAddr) -> Result<()> {

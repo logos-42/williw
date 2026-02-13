@@ -223,12 +223,12 @@ export const ExternalApiForm: React.FC<ExternalApiFormProps> = ({
             p: 2,
             borderRadius: 1,
             backgroundColor: testResult.success
-              ? 'rgba(76, 175, 80, 0.1)'
-              : 'rgba(244, 67, 54, 0.1)',
-            border: `1px solid ${testResult.success ? '#4caf50' : '#f44336'}`,
+              ? 'rgba(255, 255, 255, 0.05)'
+              : 'rgba(255, 255, 255, 0.05)',
+            border: `1px solid ${testResult.success ? '#ffffff' : '#666666'}`,
           }}
         >
-          <Typography variant="body2" color={testResult.success ? 'success.main' : 'error.main'}>
+          <Typography variant="body2" sx={{ color: testResult.success ? '#ffffff' : '#888888' }}>
             {testResult.message}
           </Typography>
         </Box>

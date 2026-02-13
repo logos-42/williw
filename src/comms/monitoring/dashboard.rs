@@ -187,7 +187,7 @@ impl MonitoringDashboard {
                     TransferEvent::TransferCompleted { transfer_id, file_size, duration_secs } => {
                         // 更新统计
                         {
-                            let transfer_id_clone = transfer_id.clone();
+                            let _transfer_id_clone = transfer_id.clone();
                             let mut s = stats.write().await;
                             s.successful_transfers += 1;
                         }

@@ -1,6 +1,7 @@
-//! Agent 模块
-//!
-//! 负责大模型配置、依赖管理和系统稳定性维护
+// Agent 模块
+// 负责大模型配置、依赖管理和系统稳定性维护
+
+#![allow(ambiguous_glob_reexports)]
 
 pub mod tools;
 pub mod workflow;

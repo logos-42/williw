@@ -3,8 +3,6 @@
 //! 实现AI自动检测、配置和管理执行环境
 
 use super::super::AsyncWorkflowExecutor;
-use super::super::*;
-use crate::device::capabilities::DeviceCapabilities;
 use crate::comms::transport::iroh::IrohConnectionManager;
 use crate::agent::context::{ContextEntry, ContextType};
 use serde::{Serialize, Deserialize};
@@ -434,7 +432,7 @@ impl AsyncWorkflowExecutor {
     async fn ai_decide_package_installation(
         &self,
         config: &EnvironmentConfig,
-        api_key: &str,
+        _api_key: &str,
     ) -> Result<bool, String> {
         let decision_prompt = format!(
             r#"环境配置决策：

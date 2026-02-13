@@ -20,7 +20,7 @@ impl ToolBridge {
         Self {}
     }
 
-    pub async fn handle_request(&self, request: ToolCallRequest) -> Result<ToolCallResponse, BridgeError> {
+    pub async fn handle_request(&self, _request: ToolCallRequest) -> Result<ToolCallResponse, BridgeError> {
         // 简化的处理逻辑
         Ok(ToolCallResponse {
             success: true,

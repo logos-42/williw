@@ -9,14 +9,65 @@ const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#2196f3',
+      main: '#ffffff',
+      contrastText: '#000000',
     },
     secondary: {
-      main: '#ff4081',
+      main: '#888888',
     },
     background: {
       default: '#000000',
-      paper: '#121212',
+      paper: '#0a0a0a',
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: '#aaaaaa',
+    },
+    divider: '#333333',
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderColor: '#ffffff',
+          '&.Mui-contained': {
+            backgroundColor: '#ffffff',
+            color: '#000000',
+            '&:hover': {
+              backgroundColor: '#e0e0e0',
+            },
+          },
+          '&.Mui-outlined': {
+            borderColor: '#ffffff',
+            color: '#ffffff',
+            '&:hover': {
+              borderColor: '#ffffff',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            },
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderColor: '#444444',
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            '& fieldset': {
+              borderColor: '#333333',
+            },
+            '&:hover fieldset': {
+              borderColor: '#555555',
+            },
+          },
+        },
+      },
     },
   },
 });

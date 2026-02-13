@@ -1,6 +1,7 @@
-//! 传输层模块
-//!
-//! 基于 iroh 提供统一的传输接口
+// 传输层模块
+// 基于 iroh 提供统一的传输接口
+
+#![allow(async_fn_in_trait)]
 
 mod iroh;
 

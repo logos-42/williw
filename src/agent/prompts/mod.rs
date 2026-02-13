@@ -1,6 +1,7 @@
-//! Agent 提示词管理模块
-//!
-//! 管理 Agent 的提示词模板、对话历史和上下文构建
+// Agent 提示词管理模块
+// 管理 Agent 的提示词模板、对话历史和上下文构建
+
+#![allow(static_mut_refs)]
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

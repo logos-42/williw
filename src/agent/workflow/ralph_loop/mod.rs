@@ -34,11 +34,6 @@ pub mod document_driven;
 pub mod docs;
 
 // 重新导出主要类型和功能
-pub use core::*;
-pub use ai_decision::*;
-pub use research::*;
-pub use learning::*;
-pub use retry_strategy::*;
 pub use auto_environment::*;
 pub use document_driven::*;
 pub use docs::*;

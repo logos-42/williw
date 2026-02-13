@@ -558,7 +558,7 @@ impl ToolCreationTool {
         
         // 获取工具文件路径
         let tool_file_path = creation_result.get("tool_file").unwrap().to_string();
-        let path = Path::new(&tool_file_path);
+        let _path = Path::new(&tool_file_path);
         
         // 执行工具
         let exec_result = match tool_def.tool_type {

@@ -73,7 +73,7 @@ impl DecentralizedModelTool {
         }
     }
 
-    async fn download_model(&self, model_name: &str, model_source: &str, target_path: &str) -> Result<serde_json::Value, ToolError> {
+    async fn download_model(&self, model_name: &str, _model_source: &str, target_path: &str) -> Result<serde_json::Value, ToolError> {
         Ok(serde_json::json!({
             "operation": "download",
             "model_name": model_name,
@@ -99,7 +99,7 @@ impl DecentralizedModelTool {
         }))
     }
 
-    async fn communicate(&self, message: &str, target_node_id: Option<&str>, broadcast: bool) -> Result<serde_json::Value, ToolError> {
+    async fn communicate(&self, message: &str, _target_node_id: Option<&str>, broadcast: bool) -> Result<serde_json::Value, ToolError> {
         Ok(serde_json::json!({
             "operation": "communicate",
             "message": message,
@@ -132,7 +132,7 @@ impl ToolExecutor for DecentralizedModelTool {
             DecentralizedModelOperation::Communicate { message, target_node_id, broadcast } => {
                 self.communicate(&message, target_node_id.as_deref(), broadcast).await
             }
-            DecentralizedModelOperation::FullPipeline { model_name, model_source, output_dir, target_nodes } => {
+            DecentralizedModelOperation::FullPipeline { model_name, model_source: _, output_dir, target_nodes } => {
                 let model_path = format!("{}/{}", output_dir, model_name);
                 let splits: Vec<_> = target_nodes.iter()
                     .map(|n| self.split_model(&model_path, n, &output_dir))

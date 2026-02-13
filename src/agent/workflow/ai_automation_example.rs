@@ -4,9 +4,7 @@
 
 use super::*;
 use crate::agent::compute::{ComputeResourceManager, ComputeTask, ComputeTaskType, TaskPayload, ComputeRequirements};
-use crate::agent::compute::decentralized_compute::TaskPriority;
 use crate::agent::prompts::{LayeredPromptManager, add_ai_workflow_prompts};
-use crate::device::types::GpuComputeApi;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -23,7 +21,7 @@ impl AIAutomationDemo {
 
         // 1. 初始化分层Prompt系统
         println!("📋 步骤1: 初始化AI工作流Prompt系统...");
-        let prompt_manager = Self::initialize_prompt_system().await?;
+        let _prompt_manager = Self::initialize_prompt_system().await?;
         println!("✅ Prompt系统初始化完成\n");
 
         // 2. 创建异步工作流执行器（带Ralph Loop）

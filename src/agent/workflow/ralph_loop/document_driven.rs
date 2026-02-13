@@ -509,7 +509,7 @@ impl AsyncWorkflowExecutor {
         println!("   步骤数: {}", task.steps.len());
 
         // 3. 创建自主上下文
-        let autonomous_context = AutonomousContext {
+        let _autonomous_context = AutonomousContext {
             identity: identity.clone(),
             task: task.clone(),
             completed_steps: vec![],

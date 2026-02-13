@@ -138,13 +138,13 @@ impl MemoryManager {
 
     /// 获取所有键
     pub fn get_keys(&self) -> Vec<String> {
-        let mut items = self.items.lock().unwrap();
+        let items = self.items.lock().unwrap();
         items.keys().cloned().collect()
     }
 
     /// 获取统计信息
     pub fn get_stats(&self) -> MemoryStats {
-        let mut items = self.items.lock().unwrap();
+        let items = self.items.lock().unwrap();
         let total_items = items.len();
         let total_size: usize = items
             .values()

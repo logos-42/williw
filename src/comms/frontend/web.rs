@@ -1,7 +1,9 @@
-/**
+/*
  * P2P 前端集成模块
  * 提供 WebAssembly 接口用于前端与 Rust 后端交互
  */
+
+#![allow(static_mut_refs)]
 
 use anyhow::Result;
 use std::sync::Arc;

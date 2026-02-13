@@ -2,7 +2,7 @@
 //!
 //! 将异步工作流执行器的事件与Tauri事件系统集成
 
-use super::{AsyncWorkflowExecutor, ExecutionEvent};
+use super::AsyncWorkflowExecutor;
 
 #[cfg(feature = "tauri")]
 use tauri::{Manager, Emitter};

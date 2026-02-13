@@ -1,7 +1,9 @@
-/**
+/*
  * P2P 前端启动器
  * 在前端桌面应用启动时自动初始化 P2P 服务
  */
+
+#![allow(static_mut_refs)]
 
 use anyhow::{Result, anyhow};
 use std::sync::Arc;

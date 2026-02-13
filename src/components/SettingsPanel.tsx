@@ -432,10 +432,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
               {/* 部署进度 */}
               {deployProgress && (
-                <Box sx={{ mb: 3, p: 2, backgroundColor: 'rgba(33, 150, 243, 0.1)', borderRadius: 1 }}>
+                <Box sx={{ mb: 3, p: 2, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {isDeploying && <CircularProgress size={20} />}
-                    <Typography variant="body2" color={isDeploying ? 'primary' : 'success.main'}>
+                    {isDeploying && <CircularProgress size={20} sx={{ color: '#ffffff' }} />}
+                    <Typography variant="body2" sx={{ color: isDeploying ? '#ffffff' : '#cccccc' }}>
                       {deployProgress}
                     </Typography>
                   </Box>

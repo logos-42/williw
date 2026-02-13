@@ -485,9 +485,9 @@ impl DecentralizedComputeNetwork {
     /// 启动任务调度器
     async fn start_task_scheduler(&self) {
         let scheduler = self.task_scheduler.clone();
-        let gpu_manager = self.gpu_manager.clone();
+        let _gpu_manager = self.gpu_manager.clone();
         let is_running = self.is_running.clone();
-        let network_state = self.network_state.clone();
+        let _network_state = self.network_state.clone();
 
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(5));
@@ -530,9 +530,9 @@ impl DecentralizedComputeNetwork {
     }
 
     /// 寻找最佳节点
-    async fn find_best_node(scheduler: &TaskScheduler, task: &ComputeTask) -> Option<String> {
+    async fn find_best_node(scheduler: &TaskScheduler, _task: &ComputeTask) -> Option<String> {
         let scores = scheduler.node_scores.read().await;
-        let strategy = scheduler.strategy.read().await;
+        let _strategy = scheduler.strategy.read().await;
         
         // 选择评分最高的节点（简化实现）
         scores.iter()

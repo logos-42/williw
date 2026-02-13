@@ -1,7 +1,9 @@
-/**
+/*
  * P2P传输事件系统
  * 提供统一的事件定义和处理机制
  */
+
+#![allow(static_mut_refs)]
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

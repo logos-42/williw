@@ -158,8 +158,8 @@ async fn main() {
                     
                     // Upload to workers
                     if let Some(device_info) = device_info {
-                        log::info!("[AutoUpload] Uploading node info: CPU cores={}, Memory={}MB, HasGPU={}", 
-                            device_info.cpu_cores, device_info.memory_mb, device_info.has_gpu);
+                        log::info!("[AutoUpload] Uploading node info: CPU cores={}, Memory={}GB, GPU={:?}", 
+                            device_info.cpu_cores, device_info.total_memory_gb, device_info.gpu_type);
                         match app_state.api_client.upload_full_node_info(device_info, iroh_node).await {
                             Ok(response) => {
                                 if response.success {

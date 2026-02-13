@@ -453,7 +453,7 @@ impl LayeredPromptExecutor {
         }
         
         // 达到最大迭代次数仍未完成
-        let final_result = self.execute_prompt_iteration(
+        let _final_result = self.execute_prompt_iteration(
             &format!("{}\n\n注意：已达到最大迭代次数({})仍未完成任务，请提供当前进度和建议", 
                     task_description, max_iterations),
             iteration

@@ -6,7 +6,7 @@ use super::{ai_setup_assistant::*, setup_tasks::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc, RwLock};
 
 /// 配置工作流
 #[derive(Debug, Clone, Serialize, Deserialize)]

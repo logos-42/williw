@@ -1,7 +1,9 @@
-/**
+/*
  * P2P 前端管理器
  * 负责管理 iroh 节点 ID、连接状态和前端交互
  */
+
+#![allow(static_mut_refs)]
 
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};

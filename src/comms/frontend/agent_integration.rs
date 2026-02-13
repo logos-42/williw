@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
-use crate::agent::prompts::{LayeredPromptManager, LayeredPromptExecutor, ContextEntry, ContextType};
+use crate::agent::prompts::{LayeredPromptManager, ContextEntry, ContextType};
 use crate::agent::tools::{ToolRegistry, ToolResult, ExecutionContext};
 use crate::agent::workflow::AsyncWorkflowExecutor;
 
@@ -278,7 +278,7 @@ impl AgentSession {
         let params = tool_call.get("params")
             .unwrap_or(&serde_json::Value::Object(serde_json::Map::new())).clone();
         
-        let mut registry = self.tool_registry.write().await;
+        let registry = self.tool_registry.write().await;
         let tool = registry.get_tool(tool_name).await
             .ok_or(format!("Tool '{}' not found", tool_name))?;
         

@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use anyhow::Result;
 
 // 导入项目中的 iroh 通讯模块
-use crate::comms::transport::iroh::{IrohConnectionManager, IrohConnectionConfig, WrappedMessage, FILE_TRANSFER_MESSAGE_TYPE, GOSSIP_MESSAGE_TYPE, CONTROL_MESSAGE_TYPE};
+use crate::comms::transport::iroh::{IrohConnectionManager, IrohConnectionConfig, WrappedMessage};
 
 /// Iroh 通讯工具
 pub struct IrohCommsTool {

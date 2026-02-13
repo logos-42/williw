@@ -259,10 +259,15 @@ impl AppState {
         sys.refresh_all();
         // 需要稍等一下再获取 CPU 使用率，否则可能是 0
         std::thread::sleep(std::time::Duration::from_millis(100));
-        sys.refresh_cpu_all();
+        sys.refresh_cpu_usage();
 
         let cpu_cores = sys.cpus().len() as u32;
-        let cpu_usage = sys.global_cpu_usage() as f64;
+        // 计算所有 CPU 的平均使用率
+        let cpu_usage = if !sys.cpus().is_empty() {
+            sys.cpus().iter().map(|cpu| cpu.cpu_usage() as f64).sum::<f64>() / sys.cpus().len() as f64
+        } else {
+            0.0
+        };
         let total_memory = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
 
         // GPU info (使用真实的系统检测)

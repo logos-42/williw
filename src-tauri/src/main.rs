@@ -123,6 +123,8 @@ async fn main() {
             tauri::async_runtime::spawn(async move {
                 let app_state = app_handle.state::<AppState>();
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+                // 跳过第一次立即触发，等待节点启动
+                interval.tick().await;
                 
                 println!("[AutoUpload] Starting automatic node info upload task (every 30s)");
                 

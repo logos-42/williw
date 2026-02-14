@@ -1,6 +1,7 @@
 mod args;
 mod agent;
 mod comms;
+mod compute;
 mod config;
 mod consensus;
 mod crypto;

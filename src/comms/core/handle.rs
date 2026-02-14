@@ -6,6 +6,7 @@ use anyhow::{anyhow, Result};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use uuid::Uuid;
+use log;
 // Stub iroh types for compatibility
 #[derive(Clone)]
 pub struct Endpoint;
@@ -113,12 +114,13 @@ impl CommsHandle {
                 Ok(gateway) => {
                     log::info!("[Iroh] ✅ QuicGateway 创建成功！");
                     let gateway = Arc::new(gateway);
-                    // 在异步上下文中处理连接
+                    // 旧配置中的 `quic_bootstrap` 仅有 SocketAddr，iroh 0.95 需要 endpoint id。
+                    // 保留字段兼容，但不再盲目尝试连接，避免伪成功。
                     for addr in quic_bootstrap {
-                        let gateway_clone = gateway.clone();
-                        tokio::spawn(async move {
-                            let _ = gateway_clone.connect(addr).await;
-                        });
+                        log::warn!(
+                            "[Iroh] 跳过 legacy bootstrap 地址 {}: 需要 endpoint_id（建议在 bootstrap_peers_file 使用 `<endpoint_id>@<ip:port>`）",
+                            addr
+                        );
                     }
                     Some(gateway)
                 }
@@ -146,14 +148,27 @@ impl CommsHandle {
 
         let endpoint = Endpoint;
 
-        // 启动 gossip 接收任务（简化实现）
+        // 启动 gossip 接收任务：从 QUIC 接收队列拉取消息并转发到事件通道
+        let quic_for_events = quic.clone();
         let _accept_endpoint = endpoint.clone();
         let _accept_gossip_tx = gossip_tx.clone();
         let _accept_event_tx = event_tx.clone();
         tokio::spawn(async move {
-            // 简化：暂时不实现复杂的连接处理
             loop {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                if let Some(quic) = &quic_for_events {
+                    let messages = quic.take_received_messages();
+                    for signed in messages {
+                        if let Ok(data) = serde_json::to_vec(&signed) {
+                            let _ = _accept_event_tx
+                                .send(IrohEvent::Gossip {
+                                    source: "quic".to_string(),
+                                    data,
+                                })
+                                .await;
+                        }
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         });
 
@@ -164,9 +179,30 @@ impl CommsHandle {
                     let addr_str = line.trim();
                     if !addr_str.is_empty() {
                         println!("[Iroh] 添加 bootstrap 节点: {}", addr_str);
-                        // 可以尝试连接这些节点
-                        // Note: endpoint.connect 需要 EndpointAddr 类型,这里暂时注释掉
-                        // let _ = endpoint.connect(addr, b"ggb-iroh").await;
+                        if let Some(ref gateway) = quic {
+                            let peer_descriptor = addr_str.to_string();
+                            let gateway_clone = gateway.clone();
+                            let event_tx_clone = event_tx.clone();
+                            tokio::spawn(async move {
+                                match gateway_clone.connect_peer(peer_descriptor.clone()).await {
+                                    Ok(_) => {
+                                        let peer = CommsHandle::peer_label_from_descriptor(&peer_descriptor);
+                                        let _ = event_tx_clone
+                                            .send(IrohEvent::ConnectionEstablished { peer })
+                                            .await;
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "[Iroh] bootstrap 连接失败 '{}': {}",
+                                            peer_descriptor,
+                                            e
+                                        );
+                                    }
+                                }
+                            });
+                        } else {
+                            log::warn!("[Iroh] QUIC 未启用，跳过 bootstrap: {}", addr_str);
+                        }
                     }
                 }
             }
@@ -311,11 +347,30 @@ impl CommsHandle {
     }
 
     /// 连接到指定节点
-    pub async fn connect(&mut self, _node_addr: String) -> Result<()> {
-        // TODO: endpoint.connect需要EndpointAddr，不是String
-        // 需要实现正确的连接逻辑
-        println!("[Iroh] 连接到节点: {}", _node_addr);
-        Ok(())
+    pub async fn connect(&mut self, node_addr: String) -> Result<()> {
+        let quic = self
+            .quic
+            .as_ref()
+            .ok_or_else(|| anyhow!("QUIC 网关未初始化，无法连接节点"))?
+            .clone();
+
+        // 尝试连接到节点
+        match quic.connect_peer(node_addr.clone()).await {
+            Ok(()) => {
+                let peer = Self::peer_label_from_descriptor(&node_addr);
+                self.add_peer(peer.clone());
+                let _ = self
+                    .event_tx
+                    .send(IrohEvent::ConnectionEstablished { peer })
+                    .await;
+                println!("[Iroh] 连接到节点: {}", node_addr);
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("[Iroh] 连接节点失败: {} - {}", node_addr, e);
+                Err(e)
+            }
+        }
     }
 
     /// 测量到指定节点的网络距离
@@ -330,8 +385,22 @@ impl CommsHandle {
 
     /// 获取本地监听地址
     pub fn local_addr(&self) -> Result<String> {
-        // 注意：这个方法在当前版本的 iroh 中可能不可用
-        // 为了编译通过，我们暂时返回一个默认值
+        if let Some(quic) = &self.quic {
+            return Ok(quic.endpoint_descriptor());
+        }
         Ok("0.0.0.0:0".to_string())
+    }
+
+    fn peer_label_from_descriptor(descriptor: &str) -> String {
+        let trimmed = descriptor.trim();
+        if let Some((left, _)) = trimmed.split_once('@') {
+            return left.trim().to_string();
+        }
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let Some(id) = value.get("id").and_then(|v| v.as_str()) {
+                return id.to_string();
+            }
+        }
+        trimmed.to_string()
     }
 }

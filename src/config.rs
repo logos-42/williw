@@ -283,6 +283,13 @@ pub struct AppConfig {
     pub device_capabilities: DeviceCapabilities,
     pub security: SecurityConfig,
     pub training: TrainingConfig,
+    /// 是否启用分布式推理
+    #[serde(default = "default_enable_distributed_inference")]
+    pub enable_distributed_inference: bool,
+}
+
+fn default_enable_distributed_inference() -> bool {
+    true
 }
 
 impl AppConfig {
@@ -325,6 +332,7 @@ impl AppConfig {
             device_capabilities: capabilities,
             security: SecurityConfig::default(),
             training: TrainingConfig::default(),
+            enable_distributed_inference: true,
         }
     }
 }
@@ -341,6 +349,7 @@ impl Default for AppConfig {
             device_capabilities: capabilities,
             security: SecurityConfig::default(),
             training: TrainingConfig::default(),
+            enable_distributed_inference: true,
         }
     }
 }

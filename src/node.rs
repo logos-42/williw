@@ -6,12 +6,14 @@ use crate::stats::TrainingStatsManager;
 use crate::topology::TopologySelector;
 use crate::training::TrainingEngine;
 use crate::types::{GeoPoint, GgbMessage};
+use crate::ai_decision::{AIDecisionEngine, NodePerformance, TopologyInfo};
+use crate::compute::{DistributedInferenceCoordinator, CoordinatorConfig};
 use anyhow::Result;
 
 use rand::SeedableRng;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, timeout, Duration};
 
 pub struct Node {
     pub comms: CommsHandle,
@@ -20,9 +22,12 @@ pub struct Node {
     pub consensus: ConsensusEngine,
     pub device_manager: DeviceManager,
     pub stats: Arc<Mutex<TrainingStatsManager>>,
+    pub ai_decision_engine: AIDecisionEngine,
     pub tick_counter: u64,
     pub checkpoint_dir: Option<PathBuf>,
     pub checkpoint_interval: u64, // 每 N 个 tick 保存一次 checkpoint
+    /// 分布式推理协调器
+    pub inference_coordinator: Option<DistributedInferenceCoordinator>,
 }
 
 impl Node {
@@ -36,24 +41,38 @@ impl Node {
 
         // 创建通信句柄
         let comms = CommsHandle::new(config.comms.clone()).await?;
-        
+
         // 创建训练引擎
         let training = TrainingEngine::new(config.clone())?;
-        
+
         // 创建拓扑选择器
         let topology = TopologySelector::new(geo.clone(), crate::topology::TopologyConfig::default());
-        
+
         // 创建共识引擎
         let consensus = ConsensusEngine::new(Arc::new(()), config.consensus.clone());
-        
+
         // 创建设备管理器
         let device_manager = DeviceManager::new();
-        
+
+        // 创建AI决策引擎
+        let ai_decision_engine = AIDecisionEngine::new();
+
         // 初始化统计管理器
         let stats = Arc::new(Mutex::new(TrainingStatsManager::new_with_model(
             training.tensor_hash(),
             training.tensor_snapshot().version as u32
         )));
+
+        // 创建分布式推理协调器
+        let inference_coordinator = if config.enable_distributed_inference {
+            let coordinator = DistributedInferenceCoordinator::new(
+                comms.node_id().to_string(),
+                CoordinatorConfig::default(),
+            );
+            Some(coordinator)
+        } else {
+            None
+        };
 
         println!(
             "启动 Williw 节点 => node: {} @ ({:.2},{:.2})",
@@ -72,6 +91,10 @@ impl Node {
                 .map(|l| format!("{:.0}%", l * 100.0))
                 .unwrap_or_else(|| "N/A".to_string())
         );
+        
+        if inference_coordinator.is_some() {
+            println!("分布式推理: 已启用");
+        }
 
         Ok(Self {
             comms,
@@ -80,9 +103,11 @@ impl Node {
             consensus,
             device_manager,
             stats,
+            ai_decision_engine,
             tick_counter: 0,
             checkpoint_dir: None,
             checkpoint_interval: 100,
+            inference_coordinator,
         })
     }
 
@@ -163,6 +188,21 @@ impl Node {
         }
     }
 
+    /// 单步驱动：用于桌面端后台任务，避免阻塞主线程
+    pub async fn drive_once(&mut self) -> Result<()> {
+        // 先处理少量待处理网络事件
+        for _ in 0..8 {
+            match timeout(Duration::from_millis(1), self.comms.next_event()).await {
+                Ok(Some(event)) => self.handle_network_event(event).await?,
+                Ok(None) => break,
+                Err(_) => break,
+            }
+        }
+
+        // 再执行一个训练/同步 tick
+        self.on_tick().await
+    }
+
     async fn on_tick(&mut self) -> Result<()> {
         self.tick_counter = self.tick_counter.wrapping_add(1);
         self.stats.lock().unwrap().increment_tick();
@@ -207,17 +247,20 @@ impl Node {
         let (primary, _backups) = self.topology.neighbor_sets();
         self.stats.lock().unwrap().update_connected_peers(primary.len() as u64);
 
+        // 使用AI决策引擎监控节点性能
+        self.update_ai_decision_engine().await;
+
         // 检查收敛性
         if self.tick_counter % 100 == 0 {
             let convergence = self.training.convergence_score();
             let param_change = self.training.parameter_change_magnitude();
             let param_std = self.training.parameter_std_dev();
-            
+
             println!(
                 "[收敛检查] 收敛度: {:.6}, 参数变化: {:.6}, 标准差: {:.6}",
                 convergence, param_change, param_std
             );
-            
+
             // 如果收敛，保存 checkpoint
             if convergence > 0.95 && param_change < 0.001 {
                 if let Some(ref checkpoint_dir) = self.checkpoint_dir {
@@ -225,7 +268,7 @@ impl Node {
                         "checkpoint_{}.json",
                         chrono::Utc::now().format("%Y%m%d_%H%M%S")
                     ));
-                    
+
                     match self.training.save_checkpoint_structured(&checkpoint_path) {
                         Ok(_) => {
                             println!("[Checkpoint] 已保存收敛 checkpoint: {:?}", checkpoint_path);
@@ -382,6 +425,48 @@ impl Node {
         }
         self.topology.mark_unreachable(target);
         false
+    }
+
+    async fn update_ai_decision_engine(&mut self) {
+        // 收集当前节点性能数据
+        let capabilities = self.device_manager.get();
+        let _stats = self.stats.lock().unwrap().clone();
+
+        // 创建节点性能记录
+        let node_performance = NodePerformance {
+            node_id: self.comms.node_id().to_string(),
+            cpu_utilization: (self.topology.neighbor_sets().0.len() as f64) / 10.0, // 示例计算
+            memory_utilization: (capabilities.max_memory_mb as f64) / 10000.0, // 假设最大内存是10GB
+            gpu_utilization: if capabilities.has_gpu { Some(0.5) } else { None }, // 示例值
+            network_latency: 10.0, // 示例值
+            throughput: 100.0, // 示例值
+            success_rate: 0.95, // 示例值
+            last_updated: chrono::Utc::now(),
+        };
+
+        // 更新AI决策引擎中的节点性能数据
+        self.ai_decision_engine.update_node_performance(node_performance).await;
+
+        // 更新拓扑信息
+        let topology_info = TopologyInfo {
+            node_id: self.comms.node_id().to_string(),
+            neighbors: self.topology.neighbor_sets().0.iter().cloned().collect(),
+            network_distance: 0.0, // 使用默认值
+            connection_quality: 0.9, // 示例值
+        };
+
+        self.ai_decision_engine.update_topology_info(topology_info).await;
+
+        // 每隔一定时间生成网络健康报告
+        if self.tick_counter % 200 == 0 {
+            let health_report = self.ai_decision_engine.get_network_health_report().await;
+            println!("[AI决策] 网络健康报告: 平均成功率 {:.2}, 节点数 {}", 
+                health_report.average_success_rate, health_report.total_nodes);
+            
+            for recommendation in &health_report.recommendations {
+                println!("[AI决策] 建议: {}", recommendation);
+            }
+        }
     }
 
     fn check_topology_health(&self) {

@@ -12,10 +12,21 @@ pub async fn upload_device_info_to_workers(
     let device_info = state.device_info.lock().clone()
         .ok_or_else(|| "No device info available".to_string())?;
 
+    let endpoint = {
+        let node_guard = state.node.lock();
+        if let Some(node) = node_guard.as_ref() {
+            node.comms
+                .local_addr()
+                .unwrap_or_else(|_| "localhost:8080".to_string())
+        } else {
+            "localhost:8080".to_string()
+        }
+    };
+
     // 上传到workers后端的 /api/node-info 端点
     match state.api_client.upload_node_info(crate::api_client::NodeInfo {
         node_id: state.api_client.get_device_id(),
-        endpoint: "localhost:8080".to_string(), // 可以从配置获取
+        endpoint,
         capabilities: crate::api_client::NodeCapabilities {
             max_memory_gb: device_info.total_memory_gb,
             gpu_type: device_info.gpu_type.clone(),
@@ -347,19 +358,76 @@ pub async fn handle_ai_node_connection(
             "content": format!("✅ AI 决定接受连接\n\n🔗 节点: {}\n🌐 连接: {}\n\n正在配置 Iroh P2P 连接...", from_node, suggested_connection)
         }));
         
-        // 配置 Iroh 连接
         let _ = app.emit("workflow-message", serde_json::json!({
             "type": "progress",
             "content": "🔗 正在建立 P2P 连接..."
         }));
-        
-        Ok(serde_json::json!({
-            "success": true,
-            "decision": "accepted",
-            "from_node": from_node,
-            "connection_config": suggested_connection,
-            "ai_reasoning": "System has GPU available, accepting peer connection"
-        }))
+
+        if suggested_connection.is_empty() {
+            let err = "连接配置为空，缺少 suggested_connection";
+            let _ = app.emit("workflow-message", serde_json::json!({
+                "type": "error",
+                "content": format!("❌ AI 决定接受连接，但连接配置无效: {}", err)
+            }));
+            return Ok(serde_json::json!({
+                "success": false,
+                "decision": "failed",
+                "from_node": from_node,
+                "connection_config": suggested_connection,
+                "ai_reasoning": "Accepted by policy, but suggested connection is empty",
+                "error": err
+            }));
+        }
+
+        // 连接时不持有 state.node 锁，避免在 await 时阻塞其他命令
+        let mut node_opt = { state.node.lock().take() };
+        let connect_result = if let Some(mut node) = node_opt.take() {
+            let result = node
+                .comms
+                .connect(suggested_connection.to_string())
+                .await
+                .map(|_| node.comms.node_id().to_string())
+                .map_err(|e| e.to_string());
+            state.node.lock().replace(node);
+            result
+        } else {
+            Err("本地节点未运行，无法建立 P2P 连接".to_string())
+        };
+
+        match connect_result {
+            Ok(local_node_id) => {
+                let _ = app.emit("workflow-message", serde_json::json!({
+                    "type": "success",
+                    "content": format!("✅ P2P 连接建立成功\n\n本地节点: {}\n远端节点: {}", local_node_id, from_node)
+                }));
+
+                Ok(serde_json::json!({
+                    "success": true,
+                    "decision": "accepted",
+                    "from_node": from_node,
+                    "connection_config": suggested_connection,
+                    "local_node_id": local_node_id,
+                    "connection_established": true,
+                    "ai_reasoning": "System has GPU available, accepting peer connection"
+                }))
+            }
+            Err(err) => {
+                let _ = app.emit("workflow-message", serde_json::json!({
+                    "type": "error",
+                    "content": format!("❌ P2P 连接建立失败\n\n节点: {}\n原因: {}", from_node, err)
+                }));
+
+                Ok(serde_json::json!({
+                    "success": false,
+                    "decision": "failed",
+                    "from_node": from_node,
+                    "connection_config": suggested_connection,
+                    "connection_established": false,
+                    "ai_reasoning": "Accepted by policy, but runtime connection failed",
+                    "error": err
+                }))
+            }
+        }
     } else {
         let _ = app.emit("workflow-message", serde_json::json!({
             "type": "warning",

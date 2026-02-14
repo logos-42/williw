@@ -11,6 +11,9 @@ pub mod device;
 pub mod crypto;
 pub mod consensus;
 
+// AI 决策模块（需要在 node 之前声明）
+pub mod ai_decision;
+
 // Solana 区块链集成 - 暂时禁用，由于依赖冲突
 // pub mod solana;
 
@@ -62,6 +65,10 @@ pub use android::*;
 // Agent 模块
 pub mod agent;
 
+// 分布式推理计算模块
+pub mod compute;
+
+// 模型模块
 // 类型别名
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 

@@ -4,12 +4,14 @@
  */
 
 use anyhow::{Result, anyhow};
-use iroh::{Endpoint, endpoint::Connection, EndpointAddr, PublicKey};
+use iroh::{Endpoint, endpoint::Connection, EndpointAddr, PublicKey, RelayUrl, TransportAddr};
 use iroh::endpoint_info::EndpointIdExt;
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
+use tokio::time::{timeout, Duration};
 use tracing::{info, warn, error, debug};
 use serde::{Serialize, Deserialize};
 
@@ -50,6 +52,7 @@ pub struct IrohConnectionManager {
     config: IrohConnectionConfig,
     connections: Arc<Mutex<HashMap<String, Connection>>>,
     message_tx: mpsc::Sender<(String, Vec<u8>)>,
+    message_rx: Arc<Mutex<mpsc::Receiver<(String, Vec<u8>)>>>,
     node_id: String,
 }
 
@@ -73,14 +76,22 @@ impl IrohConnectionManager {
         let node_id = endpoint.id().to_z32();
         info!("✅ iroh 端点已创建，节点ID: {}", node_id);
         
-        let (message_tx, _message_rx) = mpsc::channel::<(String, Vec<u8>)>(1000);
+        let (message_tx, message_rx) = mpsc::channel::<(String, Vec<u8>)>(1000);
         let connections = Arc::new(Mutex::new(HashMap::new()));
+
+        // 后台持续接受新的连接，并将消息转发到接收队列
+        Self::start_incoming_connection_task(
+            endpoint.clone(),
+            connections.clone(),
+            message_tx.clone(),
+        );
         
         Ok(Self {
             endpoint,
             config,
             connections,
             message_tx,
+            message_rx: Arc::new(Mutex::new(message_rx)),
             node_id,
         })
     }
@@ -88,23 +99,7 @@ impl IrohConnectionManager {
     /// 连接到远程节点
     pub async fn connect_to_peer(&self, peer_addr: &str) -> Result<()> {
         info!("🔗 连接到远程节点: {}", peer_addr);
-        
-        // 实现真实的iroh连接 - 使用正确的API
-        // 尝试从z-base-32格式解析PublicKey
-        let public_key = match PublicKey::from_z32(peer_addr) {
-            Ok(key) => key,
-            Err(_e) => {
-                // 如果z-base-32解析失败，尝试标准FromStr
-                match peer_addr.parse::<PublicKey>() {
-                    Ok(key) => key,
-                    Err(_) => {
-                        return Err(anyhow!("无效的节点ID格式: {} (z-base-32或base32解析都失败)", peer_addr));
-                    }
-                }
-            }
-        };
-            
-        let endpoint_addr: EndpointAddr = EndpointAddr::from(public_key);
+        let (endpoint_addr, canonical_peer_id) = Self::parse_endpoint_descriptor(peer_addr)?;
             
         // 使用iroh 0.95的正确connect API
         // 需要提供EndpointAddr和ALPN协议
@@ -112,13 +107,20 @@ impl IrohConnectionManager {
             Ok(connection) => {
                 // 存储连接
                 let mut connections = self.connections.lock().await;
-                connections.insert(peer_addr.to_string(), connection);
-                info!("✅ 已连接到节点: {}", peer_addr);
+                connections.insert(canonical_peer_id.clone(), connection.clone());
+
+                Self::spawn_connection_reader(
+                    canonical_peer_id.clone(),
+                    connection,
+                    self.message_tx.clone(),
+                );
+
+                info!("✅ 已连接到节点: {}", canonical_peer_id);
                 Ok(())
             }
             Err(e) => {
                 error!("连接失败: {}", e);
-                Err(anyhow!("无法连接到节点 {}", peer_addr))
+                Err(anyhow!("无法连接到节点 {}: {}", peer_addr, e))
             }
         }
     }
@@ -126,9 +128,13 @@ impl IrohConnectionManager {
     /// 发送消息到指定节点
     pub async fn send_message(&self, peer_id: &str, message: Vec<u8>) -> Result<()> {
         debug!("📤 发送消息到 {}: {} bytes", peer_id, message.len());
-        
-        let connections = self.connections.lock().await;
-        if let Some(connection) = connections.get(peer_id) {
+
+        let connection = {
+            let connections = self.connections.lock().await;
+            connections.get(peer_id).cloned()
+        };
+
+        if let Some(connection) = connection {
             // 使用iroh的uni流发送真实消息
             self.send_via_uni_stream(connection, &message).await?;
             debug!("✅ 消息发送成功");
@@ -139,7 +145,7 @@ impl IrohConnectionManager {
     }
     
     /// 通过iroh uni流发送消息
-    async fn send_via_uni_stream(&self, connection: &Connection, message: &[u8]) -> Result<()> {
+    async fn send_via_uni_stream(&self, connection: Connection, message: &[u8]) -> Result<()> {
         // 打开单向流
         let mut send_stream = connection.open_uni().await?;
         
@@ -158,10 +164,16 @@ impl IrohConnectionManager {
     
     /// 广播消息到所有连接的节点
     pub async fn broadcast_message(&self, message: Vec<u8>) -> Result<usize> {
-        let connections = self.connections.lock().await;
+        let connections: Vec<(String, Connection)> = {
+            let connections = self.connections.lock().await;
+            connections
+                .iter()
+                .map(|(peer_id, connection)| (peer_id.clone(), connection.clone()))
+                .collect()
+        };
         let mut sent_count = 0;
         
-        for (peer_id, connection) in connections.iter() {
+        for (peer_id, connection) in connections {
             match self.send_via_uni_stream(connection, &message).await {
                 Ok(_) => {
                     sent_count += 1;
@@ -179,60 +191,16 @@ impl IrohConnectionManager {
     
     /// 接收消息（简化版本）
     pub async fn receive_message(&self) -> Result<Option<(String, Vec<u8>)>> {
-        // 尝试接受传入连接
-        if let Some(incoming) = self.endpoint.accept().await {
-            match incoming.accept() {
-                Ok(accepting) => {
-                    match accepting.await {
-                        Ok(connection) => {
-                            let peer_addr = "incoming_peer".to_string(); // 暂时使用固定字符串
-                            info!("🔗 接收到来自 {} 的连接", peer_addr);
-                            
-                            // 尝试从连接接收数据
-                            match self.receive_from_connection(&connection).await {
-                                Ok(data) => {
-                                    if !data.is_empty() {
-                                        info!("📨 成功接收到 {} 字节的数据", data.len());
-                                        return Ok(Some((peer_addr, data)));
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("⚠️ 从连接接收数据失败: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!("⚠️ 接受连接失败: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("⚠️ 接受传入连接失败: {}", e);
-                }
-            }
+        let mut receiver = self.message_rx.lock().await;
+        match timeout(Duration::from_millis(50), receiver.recv()).await {
+            Ok(Some(message)) => Ok(Some(message)),
+            Ok(None) => Ok(None),
+            Err(_) => Ok(None),
         }
-        
-        // 检查现有连接是否有新消息
-        let connections = self.connections.lock().await;
-        for (peer_id, connection) in connections.iter() {
-            match self.receive_from_connection(connection).await {
-                Ok(data) => {
-                    if !data.is_empty() {
-                        info!("📨 从现有连接 {} 接收到 {} 字节", peer_id, data.len());
-                        return Ok(Some((peer_id.clone(), data)));
-                    }
-                }
-                Err(_) => {
-                    // 忽略接收错误，继续检查其他连接
-                }
-            }
-        }
-        
-        Ok(None)
     }
     
     /// 从连接接收消息
-    async fn receive_from_connection(&self, connection: &Connection) -> Result<Vec<u8>> {
+    async fn receive_from_connection(connection: &Connection) -> Result<Vec<u8>> {
         // 等待传入的uni流
         match connection.accept_uni().await {
             Ok(mut recv_stream) => {
@@ -251,6 +219,156 @@ impl IrohConnectionManager {
             Err(e) => {
                 Err(anyhow!("接收uni流失败: {}", e))
             }
+        }
+    }
+
+    fn start_incoming_connection_task(
+        endpoint: Endpoint,
+        connections: Arc<Mutex<HashMap<String, Connection>>>,
+        message_tx: mpsc::Sender<(String, Vec<u8>)>,
+    ) {
+        tokio::spawn(async move {
+            while let Some(incoming) = endpoint.accept().await {
+                match incoming.accept() {
+                    Ok(accepting) => match accepting.await {
+                        Ok(connection) => {
+                            let peer_id = connection.remote_id().to_z32();
+                            info!("🔗 接收到来自 {} 的连接", peer_id);
+
+                            {
+                                let mut guard = connections.lock().await;
+                                guard.insert(peer_id.clone(), connection.clone());
+                            }
+
+                            Self::spawn_connection_reader(peer_id, connection, message_tx.clone());
+                        }
+                        Err(e) => {
+                            warn!("⚠️ 接受连接失败: {}", e);
+                        }
+                    },
+                    Err(e) => {
+                        warn!("⚠️ 接受传入连接失败: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
+    fn spawn_connection_reader(
+        peer_id: String,
+        connection: Connection,
+        message_tx: mpsc::Sender<(String, Vec<u8>)>,
+    ) {
+        tokio::spawn(async move {
+            loop {
+                match Self::receive_from_connection(&connection).await {
+                    Ok(data) => {
+                        if data.is_empty() {
+                            continue;
+                        }
+                        if message_tx.send((peer_id.clone(), data)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        debug!("连接 {} 读取停止: {}", peer_id, e);
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    fn parse_endpoint_descriptor(peer_addr: &str) -> Result<(EndpointAddr, String)> {
+        #[derive(Debug, Deserialize)]
+        struct JsonDescriptor {
+            id: String,
+            #[serde(default)]
+            addrs: Vec<String>,
+        }
+
+        let peer_addr = peer_addr.trim();
+        if peer_addr.is_empty() {
+            return Err(anyhow!("peer descriptor is empty"));
+        }
+
+        if peer_addr.starts_with('{') {
+            let descriptor: JsonDescriptor = serde_json::from_str(peer_addr)
+                .map_err(|e| anyhow!("无效 JSON peer 描述: {}", e))?;
+            let endpoint_id = Self::parse_endpoint_id(&descriptor.id)?;
+            let transports = Self::parse_transports(&descriptor.addrs)?;
+            let endpoint_addr = if transports.is_empty() {
+                EndpointAddr::from(endpoint_id)
+            } else {
+                EndpointAddr::from_parts(endpoint_id, transports)
+            };
+            return Ok((endpoint_addr, endpoint_id.to_z32()));
+        }
+
+        if let Some((id_part, addrs_part)) = peer_addr.split_once('@') {
+            let endpoint_id = Self::parse_endpoint_id(id_part)?;
+            let addr_list: Vec<String> = addrs_part
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let transports = Self::parse_transports(&addr_list)?;
+            let endpoint_addr = if transports.is_empty() {
+                EndpointAddr::from(endpoint_id)
+            } else {
+                EndpointAddr::from_parts(endpoint_id, transports)
+            };
+            return Ok((endpoint_addr, endpoint_id.to_z32()));
+        }
+
+        let endpoint_id = Self::parse_endpoint_id(peer_addr)?;
+        Ok((EndpointAddr::from(endpoint_id), endpoint_id.to_z32()))
+    }
+
+    fn parse_endpoint_id(raw: &str) -> Result<PublicKey> {
+        let raw = raw.trim();
+        if let Ok(key) = PublicKey::from_z32(raw) {
+            return Ok(key);
+        }
+        if let Ok(key) = raw.parse::<PublicKey>() {
+            return Ok(key);
+        }
+        Err(anyhow!("无效的节点ID: {}", raw))
+    }
+
+    fn parse_transports(addrs: &[String]) -> Result<Vec<TransportAddr>> {
+        let mut transports = Vec::new();
+        for raw in addrs {
+            let raw = raw.trim();
+            if raw.is_empty() {
+                continue;
+            }
+            if let Ok(ip) = raw.parse::<SocketAddr>() {
+                transports.push(TransportAddr::Ip(ip));
+                continue;
+            }
+            if let Ok(relay_url) = raw.parse::<RelayUrl>() {
+                transports.push(TransportAddr::Relay(relay_url));
+                continue;
+            }
+            return Err(anyhow!(
+                "无法解析地址 '{}', 仅支持 'ip:port' 或 relay url",
+                raw
+            ));
+        }
+        Ok(transports)
+    }
+
+    /// 输出可共享的连接描述符：`<endpoint_id>@<addr1>,<addr2>...`
+    pub fn endpoint_descriptor(&self) -> String {
+        let endpoint_addr = self.endpoint.addr();
+        let mut addrs: Vec<String> = endpoint_addr.ip_addrs().map(|addr| addr.to_string()).collect();
+        addrs.extend(endpoint_addr.relay_urls().map(|relay| relay.to_string()));
+
+        if addrs.is_empty() {
+            self.node_id.clone()
+        } else {
+            format!("{}@{}", self.node_id, addrs.join(","))
         }
     }
     
@@ -355,6 +473,51 @@ impl QuicGateway {
             connection_manager,
             received_messages,
         };
+
+        let connection_manager = gateway.connection_manager.clone();
+        let received_messages = gateway.received_messages.clone();
+        tokio::spawn(async move {
+            loop {
+                match connection_manager.receive_message().await {
+                    Ok(Some((peer_id, data))) => {
+                        if data.is_empty() {
+                            continue;
+                        }
+
+                        let payload = match WrappedMessage::deserialize(&data) {
+                            Ok(wrapped) => {
+                                if wrapped.message_type != GOSSIP_MESSAGE_TYPE {
+                                    debug!(
+                                        "收到非 gossip 消息，类型={}，来源={}",
+                                        wrapped.message_type,
+                                        peer_id
+                                    );
+                                    continue;
+                                }
+                                wrapped.payload
+                            }
+                            Err(_) => data,
+                        };
+
+                        match serde_json::from_slice::<SignedGossip>(&payload) {
+                            Ok(message) => {
+                                received_messages.write().push(message);
+                            }
+                            Err(e) => {
+                                debug!("忽略无法解析的 gossip 负载: {}", e);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        // 无消息，继续轮询
+                    }
+                    Err(e) => {
+                        warn!("接收消息失败: {}", e);
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+            }
+        });
         
         // 输出真实的 iroh 节点 ID
         info!("🎯 QuicGateway 创建完成，节点ID: {}", gateway.node_id());
@@ -363,9 +526,11 @@ impl QuicGateway {
     }
 
     pub async fn connect(&self, addr: std::net::SocketAddr) -> Result<()> {
-        let addr_str = addr.to_string();
-        self.connection_manager.connect_to_peer(&addr_str).await?;
-        Ok(())
+        self.connection_manager.connect_to_peer(&addr.to_string()).await
+    }
+
+    pub async fn connect_peer(&self, peer_descriptor: String) -> Result<()> {
+        self.connection_manager.connect_to_peer(&peer_descriptor).await
     }
     
     /// 测量到指定节点的网络距离
@@ -412,5 +577,9 @@ impl QuicGateway {
     /// 获取真实的 iroh 节点 ID
     pub fn node_id(&self) -> String {
         self.connection_manager.node_id()
+    }
+
+    pub fn endpoint_descriptor(&self) -> String {
+        self.connection_manager.endpoint_descriptor()
     }
 }

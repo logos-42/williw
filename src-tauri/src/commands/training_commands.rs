@@ -3,12 +3,19 @@ use williw::Node;
 use williw::config::AppConfig;
 use tauri::{State, Emitter};
 use serde_json;
+use std::sync::Arc;
+use parking_lot::Mutex;
+use tokio::time::Duration;
 
 // Start training node
 #[tauri::command]
 pub async fn start_training(
     state: State<'_, AppState>
 ) -> Result<String, String> {
+    if state.training_status.lock().is_running {
+        return Err("Training node is already running".to_string());
+    }
+
     let model_config = {
         let models = state.available_models.lock();
         models.first().cloned().unwrap_or_default()
@@ -32,6 +39,8 @@ pub async fn start_training(
     status.accuracy = 0.0;
     status.loss = 1.0;
     status.samples_processed = 0;
+
+    spawn_node_driver(state.node.clone(), state.training_status.clone());
 
     Ok(format!("Training started with node: {}", node_id))
 }
@@ -259,4 +268,34 @@ async fn fallback_to_workers(
             Err(format!("连接 Workers 网络失败: {}", e))
         }
     }
+}
+
+fn spawn_node_driver(
+    node_store: Arc<Mutex<Option<Node>>>,
+    training_status: Arc<Mutex<TrainingStatus>>,
+) {
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = tokio::time::interval(Duration::from_secs(1));
+
+        loop {
+            ticker.tick().await;
+
+            if !training_status.lock().is_running {
+                break;
+            }
+
+            let mut node_opt = { node_store.lock().take() };
+            let Some(mut node) = node_opt.take() else {
+                break;
+            };
+
+            if let Err(e) = node.drive_once().await {
+                eprintln!("[NodeDriver] tick 执行失败: {}", e);
+            }
+
+            node_store.lock().replace(node);
+        }
+
+        eprintln!("[NodeDriver] 后台节点驱动已停止");
+    });
 }

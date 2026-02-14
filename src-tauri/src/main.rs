@@ -6,6 +6,8 @@ mod state;
 mod events;
 mod api_client;
 mod system_checks;
+mod task_handler;
+mod ai_decision;
 
 use commands::training_commands::{
     start_training,
@@ -46,10 +48,15 @@ use commands::gpu_commands::{
     install_dependencies,
     download_default_model,
 };
+use commands::ai_decision_commands::{
+    ai_download_and_split_model,
+};
 
 use tauri::Emitter;
 use tauri::Manager;
-use state::{AppState, CliArgsStore, NodeConfig};
+use state::{AppState, CliArgsStore, TrainingStatus};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 // Initialize logger
 extern crate log;
@@ -107,6 +114,36 @@ fn parse_cli_args() -> CliArgsStore {
     }
     
     cli_args
+}
+
+fn spawn_node_driver(
+    node_store: Arc<Mutex<Option<williw::Node>>>,
+    training_status: Arc<Mutex<TrainingStatus>>,
+) {
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
+
+        loop {
+            ticker.tick().await;
+
+            if !training_status.lock().is_running {
+                break;
+            }
+
+            let mut node_opt = { node_store.lock().take() };
+            let Some(mut node) = node_opt.take() else {
+                break;
+            };
+
+            if let Err(e) = node.drive_once().await {
+                log::warn!("[AutoStart] node driver tick failed: {}", e);
+            }
+
+            node_store.lock().replace(node);
+        }
+
+        log::info!("[AutoStart] node driver stopped");
+    });
 }
 
 #[tokio::main]
@@ -169,6 +206,7 @@ async fn main() {
             install_dependencies,
             download_default_model,
             update_api_key_name,
+            ai_download_and_split_model,
         ])
         .setup(|app| {
             // Initialize event handlers
@@ -258,6 +296,10 @@ async fn main() {
                             // Update training status
                             let mut status = app_state.training_status.lock();
                             status.is_running = true;
+                            drop(status);
+
+                            // Start node background driver so the node keeps progressing without blocking UI.
+                            spawn_node_driver(app_state.node.clone(), app_state.training_status.clone());
                             
                             // Emit event to frontend
                             let _ = app_handle.emit("node-started", serde_json::json!({
@@ -296,6 +338,61 @@ async fn main() {
                     interval.tick().await;
                     // Emit event to refresh device info in frontend
                     let _ = app_handle.emit("device_info_refresh", ());
+                }
+            });
+
+            // ===== 消息轮询后台任务：每10秒轮询 Workers 网络接收任务 =====
+            let app_handle_tasks = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let app_state = app_handle_tasks.state::<AppState>();
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+                // 跳过第一次立即触发，等待应用完全启动
+                interval.tick().await;
+                
+                println!("[TaskPoll] Starting automatic workers message polling (every 10s)");
+                let mut last_poll_time: Option<String> = None;
+                
+                loop {
+                    interval.tick().await;
+                    
+                    // 轮询 Workers 的待处理消息
+                    match app_state.api_client.poll_messages(last_poll_time.clone()).await {
+                        Ok(response) => {
+                            if response.success && !response.messages.is_empty() {
+                                println!("[TaskPoll] 📥 收到 {} 条消息", response.messages.len());
+                                
+                                println!("[TaskPoll] 批量处理 {} 条消息", response.messages.len());
+                                
+                                // 批量处理所有消息
+                                let results = task_handler::TaskHandler::handle_messages(
+                                    response.messages,
+                                    &app_handle_tasks,
+                                    &app_state,
+                                ).await;
+
+                                match results {
+                                    Ok(task_results) => {
+                                        for task_result in task_results {
+                                            // 上报任务结果到 Workers
+                                            if let Err(e) = task_handler::report_task_result(
+                                                &app_state.api_client,
+                                                task_result,
+                                            ).await {
+                                                println!("[TaskPoll] ⚠️ 结果上报失败: {}", e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        println!("[TaskPoll] ❌ 消息处理失败: {}", e);
+                                    }
+                                }
+                            }
+                            last_poll_time = Some(response.poll_timestamp);
+                        }
+                        Err(e) => {
+                            println!("[TaskPoll] ⚠️ 轮询失败: {:?}", e);
+                        }
+                    }
                 }
             });
 

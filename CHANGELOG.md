@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-02-13
+
+### Fixed
+
+- **Iroh peer connection closure**
+  - Implemented real `CommsHandle::connect` logic (no longer a TODO placeholder).
+  - Added support for peer descriptors in format `<endpoint_id>@<ip:port>,<relay_url>` and JSON descriptors.
+  - Connected `workers` AI connection acceptance flow to actual iroh connection execution.
+
+- **Message path reliability**
+  - Added background incoming-connection reader for iroh transport.
+  - Routed received wrapped gossip messages into `QuicGateway` receive queue for downstream processing.
+  - Reduced lock contention in send/broadcast paths by avoiding async awaits while holding connection-map locks.
+
+- **Node identity stability**
+  - Reworked desktop device ID generation to be persistent and cross-platform.
+  - Prevented non-Windows random ID churn across requests, improving Workers-side node continuity.
+
+- **Runtime metadata accuracy**
+  - Platform metadata now uses runtime OS detection.
+  - App version metadata now reads from package version.
+
+### Changed
+
+- Project version bumped to `0.1.1` across:
+  - `Cargo.toml`
+  - `src-tauri/Cargo.toml`
+  - `package.json`
+
 ## [0.1.0] - 2026-02-12
 
 ### Added

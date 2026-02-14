@@ -1,6 +1,6 @@
 [package]
 name = "williw-desktop"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [build-dependencies]
@@ -24,6 +24,10 @@ rand = "0.8"
 
 # Williw core library
 williw = { path = "..", features = ["default"] }
+
+# Model modules
+model-downloader = { path = "../src/models/model_downloader" }
+model-splitter = { path = "../src/models/model_splitter" }
 
 [features]
 default = ["custom-protocol"]

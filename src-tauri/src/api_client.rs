@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use crate::state::{DeviceInfo, ModelConfig, TrainingStatus};
 use anyhow::Result;
 
@@ -323,43 +324,29 @@ impl WorkersApiClient {
 
     /// 获取设备ID（生成或读取持久化的设备ID）
     pub fn get_device_id(&self) -> String {
-        // 这里可以从配置文件或注册表读取，或者生成一个新的
-        // 为了简单起见，我们使用一个基于机器信息的ID
-        use std::process::Command;
-        
-        if let Ok(output) = Command::new("wmic")
-            .args(&["csproduct", "get", "UUID", "/format:list"])
-            .output() 
-        {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
-                for line in output_str.lines() {
-                    if line.starts_with("UUID=") {
-                        if let Some(uuid) = line.split('=').nth(1) {
-                            return uuid.trim().to_string();
-                        }
-                    }
-                }
+        if let Ok(override_id) = std::env::var("WILLIW_DEVICE_ID") {
+            let override_id = override_id.trim();
+            if !override_id.is_empty() {
+                return override_id.to_string();
             }
         }
-        
-        // 备选方案：使用MAC地址
-        if let Ok(output) = Command::new("getmac")
-            .args(&["/format", "list"])
-            .output()
-        {
-            if let Ok(output_str) = String::from_utf8(output.stdout) {
-                for line in output_str.lines() {
-                    if line.contains("Physical Address") {
-                        if let Some(mac) = line.split('=').nth(1) {
-                            return mac.trim().replace("-", ":");
-                        }
-                    }
-                }
+
+        let id_path = Self::device_id_path();
+        if let Ok(existing) = std::fs::read_to_string(&id_path) {
+            let existing = existing.trim();
+            if !existing.is_empty() {
+                return existing.to_string();
             }
         }
-        
-        // 最后备选：生成随机UUID
-        uuid::Uuid::new_v4().to_string()
+
+        let generated = Self::detect_system_id().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        if let Some(parent) = id_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&id_path, &generated);
+
+        generated
     }
 
     /// 获取设备元数据
@@ -372,11 +359,133 @@ impl WorkersApiClient {
         capabilities.insert("family".to_string(), serde_json::Value::String(std::env::consts::FAMILY.to_string()));
         
         DeviceMetadata {
-            platform: "windows".to_string(), // 可以动态检测
-            app_version: "0.1.0".to_string(), // 从Cargo.toml读取
+            platform: std::env::consts::OS.to_string(),
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
             node_id: None, // 可以从Node获取
             capabilities,
         }
+    }
+
+    fn device_id_path() -> PathBuf {
+        if let Ok(path) = std::env::var("WILLIW_DEVICE_ID_FILE") {
+            return PathBuf::from(path);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(app_data) = std::env::var("APPDATA") {
+                return PathBuf::from(app_data).join("williw").join("device_id");
+            }
+        }
+
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(".williw").join("device_id");
+        }
+
+        std::env::temp_dir().join("williw_device_id")
+    }
+
+    fn detect_system_id() -> Option<String> {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(machine_id) = std::fs::read_to_string("/etc/machine-id") {
+                let machine_id = machine_id.trim();
+                if !machine_id.is_empty() {
+                    return Some(machine_id.to_string());
+                }
+            }
+            if let Ok(machine_id) = std::fs::read_to_string("/var/lib/dbus/machine-id") {
+                let machine_id = machine_id.trim();
+                if !machine_id.is_empty() {
+                    return Some(machine_id.to_string());
+                }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+
+            if let Ok(output) = Command::new("ioreg")
+                .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+                .output()
+            {
+                if let Ok(output_str) = String::from_utf8(output.stdout) {
+                    for line in output_str.lines() {
+                        if line.contains("IOPlatformUUID") {
+                            if let Some(uuid) = line.split('=').nth(1) {
+                                let uuid = uuid.trim().trim_matches('"');
+                                if !uuid.is_empty() {
+                                    return Some(uuid.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Ok(output) = Command::new("system_profiler")
+                .args(["SPHardwareDataType"])
+                .output()
+            {
+                if let Ok(output_str) = String::from_utf8(output.stdout) {
+                    for line in output_str.lines() {
+                        let line = line.trim();
+                        if line.starts_with("Hardware UUID:") {
+                            if let Some(uuid) = line.split(':').nth(1) {
+                                let uuid = uuid.trim();
+                                if !uuid.is_empty() {
+                                    return Some(uuid.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+
+            if let Ok(output) = Command::new("wmic")
+                .args(["csproduct", "get", "UUID", "/format:list"])
+                .output()
+            {
+                if let Ok(output_str) = String::from_utf8(output.stdout) {
+                    for line in output_str.lines() {
+                        if line.starts_with("UUID=") {
+                            if let Some(uuid) = line.split('=').nth(1) {
+                                let uuid = uuid.trim();
+                                if !uuid.is_empty() {
+                                    return Some(uuid.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Ok(output) = Command::new("getmac")
+                .args(["/format", "list"])
+                .output()
+            {
+                if let Ok(output_str) = String::from_utf8(output.stdout) {
+                    for line in output_str.lines() {
+                        if line.contains("Physical Address") {
+                            if let Some(mac) = line.split('=').nth(1) {
+                                let mac = mac.trim().replace("-", ":");
+                                if !mac.is_empty() {
+                                    return Some(mac);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     /// 节点无法联系部分节点时，请求重新分配新的节点
@@ -494,6 +603,34 @@ impl WorkersApiClient {
 
         let messages_response: WorkersMessagesResponse = response.json().await?;
         Ok(messages_response)
+    }
+
+    /// 上报任务执行结果
+    pub async fn report_task_result(
+        &self,
+        task_id: String,
+        success: bool,
+        result: Option<serde_json::Value>,
+        error: Option<String>,
+        execution_time_ms: u64,
+    ) -> Result<ApiResponse> {
+        let payload = serde_json::json!({
+            "task_id": task_id,
+            "success": success,
+            "result": result,
+            "error": error,
+            "execution_time_ms": execution_time_ms,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        });
+
+        let response = self.client
+            .post(&format!("{}/api/task-result", self.base_url))
+            .json(&payload)
+            .send()
+            .await?;
+
+        let api_response: ApiResponse = response.json().await?;
+        Ok(api_response)
     }
 }
 

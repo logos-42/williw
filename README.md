@@ -1,6 +1,6 @@
 # williw 去中心化训练节点
 
-> **版本**: v0.1.0 | **状态**: MVP Release Candidate
+> **版本**: v0.1.1 | **状态**: MVP Release Candidate
 
 **williw** - 地理流言基础平台
 
@@ -152,7 +152,7 @@ cargo run            # 运行节点，默认随机Geo位置 & 128维模型
 
 默认 Gossip 主题为 `williw-training`，可通过环境变量和命令行参数自定义。
 
-### MVP 功能范围 (v0.1.0)
+### MVP 功能范围 (v0.1.1)
 
 本版本包含以下核心功能：
 

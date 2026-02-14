@@ -47,7 +47,7 @@ impl Default for TrainingStats {
 }
 
 /// 统计数据管理器
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TrainingStatsManager {
     stats: TrainingStats,
 }

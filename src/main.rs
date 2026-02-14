@@ -12,6 +12,7 @@ mod stats;
 mod topology;
 mod training;
 mod types;
+mod ai_decision;
 
 use crate::args::{get_stats_output, parse_args_and_build_config};
 use crate::node::Node;

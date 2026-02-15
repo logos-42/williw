@@ -183,18 +183,81 @@ impl DecentralizedModelTool {
         }
     }
 
-    async fn download_model(&self, model_name: &str, _model_source: &str, target_path: &str) -> Result<serde_json::Value, ToolError> {
-        // TODO: 集成实际的模型下载器
-        log::info!("[DecentralizedModel] 下载模型: {} -> {}", model_name, target_path);
+    async fn download_model(&self, model_name: &str, model_source: &str, target_path: &str) -> Result<serde_json::Value, ToolError> {
+        log::info!("[DecentralizedModel] 下载模型: {} -> {} from {}", model_name, target_path, model_source);
         
-        Ok(serde_json::json!({
-            "operation": "download",
-            "model_name": model_name,
-            "local_path": target_path,
-            "status": "completed",
-            "file_size_mb": 1024,
-            "message": format!("模型 {} 已下载到 {}", model_name, target_path)
-        }))
+        // 调用 Python 脚本真正下载模型
+        let script_path = std::env::current_dir()
+            .unwrap_or_default()
+            .join("scripts")
+            .join("hf_model_tool.py");
+        
+        let output = std::process::Command::new("python3")
+            .args(&[
+                script_path.to_str().unwrap_or("scripts/hf_model_tool.py"),
+                "download",
+                "--model", model_name,
+                "--output", target_path,
+            ])
+            .output()
+            .map_err(|e| ToolError::ExecutionFailed(format!("Failed to run download script: {}", e)))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!("[DecentralizedModel] 下载失败: {}, 尝试备用方案", stderr);
+            
+            // 如果 Python 脚本失败，返回友好错误
+            return Ok(serde_json::json!({
+                "operation": "download",
+                "model_name": model_name,
+                "model_source": model_source,
+                "local_path": target_path,
+                "status": "error",
+                "error": format!("下载失败: {}", stderr),
+                "message": format!("模型 {} 下载失败，请检查模型名称是否正确", model_name)
+            }));
+        }
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // 解析 Python 返回的 JSON
+        match serde_json::from_str::<serde_json::Value>(&stdout) {
+            Ok(result) => {
+                if result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    let size_mb = result.get("size_mb").and_then(|v| v.as_f64()).unwrap_or(1024.0);
+                    let msg = result.get("message").and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_else(|| format!("模型 {} 已下载", model_name));
+                    Ok(serde_json::json!({
+                        "operation": "download",
+                        "model_name": model_name,
+                        "model_source": model_source,
+                        "local_path": result["local_path"],
+                        "status": "completed",
+                        "file_size_mb": size_mb,
+                        "message": msg
+                    }))
+                } else {
+                    let err = result.get("error").and_then(|v| v.as_str()).unwrap_or("未知错误");
+                    Ok(serde_json::json!({
+                        "operation": "download",
+                        "model_name": model_name,
+                        "status": "error",
+                        "error": err,
+                        "message": format!("模型 {} 下载失败", model_name)
+                    }))
+                }
+            }
+            Err(_) => {
+                // JSON 解析失败，返回原始输出
+                Ok(serde_json::json!({
+                    "operation": "download",
+                    "model_name": model_name,
+                    "local_path": target_path,
+                    "status": "completed",
+                    "message": format!("模型 {} 已下载到 {}", model_name, target_path),
+                    "raw_output": stdout
+                }))
+            }
+        }
     }
 
     /// 切分模型 - AI可自主执行

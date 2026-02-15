@@ -14,7 +14,8 @@ pub mod network;
 pub mod aggregator;
 
 // 重新导出常用类型
-pub use protocol::{InferenceMessage, ShardInfo, ExecutionMetrics};
+pub use protocol::{InferenceMessage, ShardInfo, ExecutionMetrics, PartialResult, AggregationMethod};
 pub use cache::{IntermediateCache, CachedResult};
 pub use coordinator::{DistributedInferenceCoordinator, InferenceTaskState, InferenceStatus, CoordinatorConfig};
 pub use network::{InferenceNetwork, IrohInferenceNetwork, MockInferenceNetwork, InferenceNetworkConfig};
+pub use aggregator::{ResultAggregator, AggregatedResult};

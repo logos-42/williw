@@ -10,8 +10,9 @@ use tokio::time::{timeout, Duration};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::protocol::{InferenceMessage, ShardInfo, ShardStatus, ShardTable, ExecutionMetrics, InferenceRequest, InferenceResult, InferenceConfig};
+use super::protocol::{InferenceMessage, ShardInfo, ShardStatus, ShardTable, ExecutionMetrics, InferenceRequest, InferenceResult, InferenceConfig, PartialResult, AggregationMethod};
 use super::cache::{IntermediateCache, CachedResult};
+use crate::compute::ResultAggregator;
 use crate::ai_decision::{AIDecisionEngine, ExecutionContext, AcceptanceCriterion};
 use crate::comms::transport::iroh::IrohConnectionManager;
 
@@ -159,6 +160,8 @@ pub struct DistributedInferenceCoordinator {
     completion_tx: mpsc::Sender<TaskCompletion>,
     /// 任务完成接收器
     completion_rx: Mutex<mpsc::Receiver<TaskCompletion>>,
+    /// 结果聚合器
+    aggregator: Arc<RwLock<ResultAggregator>>,
 }
 
 /// 节点状态
@@ -202,6 +205,7 @@ impl DistributedInferenceCoordinator {
             is_running: Arc::new(RwLock::new(false)),
             completion_tx,
             completion_rx: Mutex::new(completion_rx),
+            aggregator: Arc::new(RwLock::new(ResultAggregator::new())),
         }
     }
     
@@ -317,14 +321,40 @@ impl DistributedInferenceCoordinator {
         
         let shard_order = task_state.shard_order.clone();
         let mut current_data = task_state.input_data.clone();
+        let model_id = task_state.model_id.clone();
+        let num_shards = shard_order.len();
         drop(tasks);
+        
+        // 为任务创建聚合器
+        {
+            let agg = self.aggregator.read().await;
+            agg.create_task(
+                task_id.to_string(),
+                model_id,
+                num_shards,
+                self.config.node_timeout_secs as u64 * 1000,
+            ).await;
+        }
         
         // 按顺序执行每个分片
         for (index, shard_id) in shard_order.iter().enumerate() {
             // 检查缓存
             if let Some(cached) = self.cache.get(task_id, shard_id).await {
                 log::info!("💾 [Coordinator] Using cached result for shard {}", shard_id);
-                current_data = cached;
+                current_data = cached.clone();
+                
+                // 添加到聚合器（使用缓存的结果）
+                let partial = PartialResult {
+                    node_id: self.node_id.clone(),
+                    shard_id: shard_id.clone(),
+                    output_text: String::from_utf8_lossy(&cached).to_string(),
+                    confidence: 1.0,
+                    execution_time_ms: 0,
+                };
+                {
+                    let agg = self.aggregator.read().await;
+                    agg.add_result(task_id, partial).await;
+                }
                 
                 // 更新任务状态
                 let mut tasks = self.tasks.write().await;
@@ -373,6 +403,22 @@ impl DistributedInferenceCoordinator {
                 return Err(error);
             }
             
+            // 添加到聚合器
+            let partial = PartialResult {
+                node_id: node_id.clone(),
+                shard_id: shard_id.clone(),
+                output_text: String::from_utf8_lossy(&result.output_data).to_string(),
+                confidence: 1.0,
+                execution_time_ms: result.metrics.execution_time_ms,
+            };
+            {
+                let agg = self.aggregator.read().await;
+                let aggregated = agg.add_result(task_id, partial).await;
+                if let Some(agg_result) = aggregated {
+                    log::info!("✅ [Coordinator] All shards aggregated, method: {:?}", agg_result.method);
+                }
+            }
+            
             // 缓存中间结果
             self.cache.put(task_id, shard_id, result.output_data.clone()).await;
             current_data = result.output_data;
@@ -394,7 +440,7 @@ impl DistributedInferenceCoordinator {
             state.completed_at = Some(completed_at);
         }
         
-        log::info!("✅ [Coordinator] Task {} completed", task_id);
+        log::info!("✅ [Coordinator] Task {} completed with aggregation", task_id);
         
         Ok(InferenceResult {
             task_id: task_id.to_string(),

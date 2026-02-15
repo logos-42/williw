@@ -207,6 +207,9 @@ impl IrohInferenceNetwork {
     /// 获取消息类型
     fn get_message_type(message: &InferenceMessage) -> NetworkMessageType {
         match message {
+            InferenceMessage::DistributedInferenceRequest { .. } => NetworkMessageType::ExecuteShard,
+            InferenceMessage::DistributedInferenceResponse { .. } => NetworkMessageType::ShardResult,
+            InferenceMessage::AggregatedInferenceResult { .. } => NetworkMessageType::ShardResult,
             InferenceMessage::ExecuteShard { .. } => NetworkMessageType::ExecuteShard,
             InferenceMessage::ExecutionResult { .. } => NetworkMessageType::ShardResult,
             InferenceMessage::RegisterShard { .. } => NetworkMessageType::RegisterShard,

@@ -8,6 +8,77 @@
 2. **保证数据完整性** - 使用 checksum 验证确保传输无误
 3. **优化网络效率** - 并行处理最大化带宽利用率
 
+---
+
+## 🧠 分布式推理架构
+
+**重要**：本系统使用 **iroh P2P网络** 作为分布式推理的传输信道，**不需要单独的GPU服务器**。
+
+### 架构说明
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     iroh P2P 网络                           │
+│  (QUIC传输 + NAT穿透 + 端到端加密)                          │
+└─────────────────────────────────────────────────────────────┘
+    ↓ 输入广播           ↑ 结果聚合
+┌──────┴──────┐    ┌──────┴──────┐    ┌──────┴──────┐
+│  节点 1     │    │  节点 2     │    │  节点 3     │
+│ (模型分片1) │    │ (模型分片2) │    │ (模型分片3) │
+│  本地推理   │    │  本地推理   │    │  本地推理   │
+└─────────────┘    └─────────────┘    └─────────────┘
+```
+
+### 执行流程
+
+1. **模型分片** - 模型已被切分并通过iroh分发到各节点
+2. **输入广播** - 推理请求通过iroh广播到所有节点
+3. **本地推理** - 每个节点使用本地算力（CPU/GPU/NPU）执行推理
+4. **结果聚合** - 各节点结果通过iroh传回并聚合
+
+---
+
+## ⚡ AI模型下载指南（重要）
+
+当你需要从 HuggingFace 下载模型时，**必须使用 BashTool 调用 Python 脚本**。
+
+### 方式1：使用Python huggingface_hub库（推荐）
+
+```json
+{
+  "operation": "Execute",
+  "shell": "python",
+  "command": "from huggingface_hub import snapshot_download; snapshot_download('meta-llama/Llama-2-7b-hf', local_dir='./models/llama-2-7b')",
+  "timeout_seconds": 600
+}
+```
+
+### 方式2：使用huggingface-cli命令行工具
+
+```json
+{
+  "operation": "Execute",
+  "shell": "bash",
+  "command": "huggingface-cli download meta-llama/Llama-2-7b-hf --local-dir ./models/llama-2-7b",
+  "timeout_seconds": 600
+}
+```
+
+### 方式3：使用git克隆模型仓库
+
+```json
+{
+  "operation": "Execute",
+  "shell": "bash",
+  "command": "git lfs install && git clone https://huggingface.co/meta-llama/Llama-2-7b-hf ./models/llama-2-7b",
+  "timeout_seconds": 600
+}
+```
+
+**注意：** 下载完成后记得安装依赖：`pip install huggingface_hub`, `pip install huggingface_hub[torch]`
+
+---
+
 ## 📋 可用操作
 
 ### 1. Download - 下载模型
@@ -27,6 +98,8 @@
 **使用场景：**
 - 从源头节点获取基础模型
 - 模型首次进入网络时
+
+**重要提示：** 当前Download操作是stub实现，AI应该使用BashTool调用Python/huggingface-cli下载模型
 
 ---
 

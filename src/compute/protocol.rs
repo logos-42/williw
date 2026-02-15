@@ -7,7 +7,56 @@ use chrono::{DateTime, Utc};
 
 /// 推理消息类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum InferenceMessage {
+    /// 分布式推理请求（广播到所有节点）
+    DistributedInferenceRequest {
+        /// 任务 ID
+        task_id: String,
+        /// 模型 ID
+        model_id: String,
+        /// 输入文本
+        input_text: String,
+        /// 推理配置
+        config: InferenceConfig,
+        /// 请求时间戳
+        timestamp: i64,
+    },
+    
+    /// 分布式推理响应（各节点返回结果）
+    DistributedInferenceResponse {
+        /// 任务 ID
+        task_id: String,
+        /// 节点 ID
+        node_id: String,
+        /// 分片 ID
+        shard_id: String,
+        /// 输出文本
+        output_text: String,
+        /// 置信度
+        confidence: f32,
+        /// 执行时间（毫秒）
+        execution_time_ms: u64,
+        /// 是否成功
+        success: bool,
+        /// 错误信息
+        error: Option<String>,
+    },
+    
+    /// 聚合推理结果（协调节点汇总）
+    AggregatedInferenceResult {
+        /// 任务 ID
+        task_id: String,
+        /// 最终输出
+        final_output: String,
+        /// 各节点结果
+        partial_results: Vec<PartialResult>,
+        /// 聚合方法
+        aggregation_method: AggregationMethod,
+        /// 总执行时间
+        total_time_ms: u64,
+    },
+    
     /// 执行分片请求
     ExecuteShard {
         /// 分片 ID
@@ -118,6 +167,36 @@ pub struct ShardExecutionMetadata {
     pub timeout_ms: u64,
     /// 优先级 (0-9, 9 最高)
     pub priority: u8,
+}
+
+/// 聚合方法
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AggregationMethod {
+    /// 投票（选择最常见的答案）
+    Voting,
+    /// 加权平均
+    WeightedAverage,
+    /// 选取置信度最高的
+    BestConfidence,
+    /// 拼接所有输出
+    Concatenate,
+    /// 简单平均
+    Average,
+}
+
+/// 部分推理结果（来自单个节点）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartialResult {
+    /// 节点 ID
+    pub node_id: String,
+    /// 分片 ID
+    pub shard_id: String,
+    /// 输出文本
+    pub output_text: String,
+    /// 置信度
+    pub confidence: f32,
+    /// 执行时间（毫秒）
+    pub execution_time_ms: u64,
 }
 
 /// 分片信息

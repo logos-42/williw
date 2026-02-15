@@ -11,6 +11,7 @@ pub mod protocol;
 pub mod cache;
 pub mod coordinator;
 pub mod network;
+pub mod aggregator;
 
 // 重新导出常用类型
 pub use protocol::{InferenceMessage, ShardInfo, ExecutionMetrics};

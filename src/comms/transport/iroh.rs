@@ -162,6 +162,39 @@ impl IrohConnectionManager {
         Ok(())
     }
     
+    /// 发送文件到指定节点
+    pub async fn send_file(&self, peer_id: &str, file_path: &str) -> Result<(u64, String)> {
+        use std::fs::File;
+        use std::io::Read;
+        
+        let path = std::path::Path::new(file_path);
+        if !path.exists() {
+            return Err(anyhow!("文件不存在: {}", file_path));
+        }
+        
+        let metadata = std::fs::metadata(path)?;
+        let file_size = metadata.len();
+        
+        // 读取文件内容
+        let mut file = File::open(path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        
+        // 计算校验和
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        buffer.hash(&mut hasher);
+        let checksum = format!("{:016x}", hasher.finish());
+        
+        // 发送文件数据
+        self.send_message(peer_id, buffer).await?;
+        
+        log::info!("📤 文件 {} ({} bytes) 已发送到 {}", file_path, file_size, peer_id);
+        
+        Ok((file_size, checksum))
+    }
+    
     /// 广播消息到所有连接的节点
     pub async fn broadcast_message(&self, message: Vec<u8>) -> Result<usize> {
         let connections: Vec<(String, Connection)> = {

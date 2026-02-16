@@ -153,15 +153,36 @@ pub struct ShardRegistrationInfo {
 }
 
 /// 去中心化模型工具
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct DecentralizedModelTool {
     node_id: String,
+    manager: std::sync::Arc<tokio::sync::Mutex<Option<std::sync::Arc<crate::comms::transport::iroh::IrohConnectionManager>>>>,
 }
 
 impl DecentralizedModelTool {
     pub fn new() -> Self {
         Self {
             node_id: format!("node_{}", Uuid::new_v4().to_string()[..8].to_string()),
+            manager: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+        }
+    }
+    
+    /// 初始化 iroh 连接管理器
+    pub async fn init_iroh(&self) -> Result<(), String> {
+        use crate::comms::transport::iroh::{IrohConnectionManager, IrohConnectionConfig};
+        
+        let config = IrohConnectionConfig::default();
+        match IrohConnectionManager::new(config).await {
+            Ok(mgr) => {
+                let mut lock = self.manager.lock().await;
+                *lock = Some(std::sync::Arc::new(mgr));
+                log::info!("[DecentralizedModel] iroh 连接管理器已初始化");
+                Ok(())
+            }
+            Err(e) => {
+                log::warn!("[DecentralizedModel] iroh 初始化失败: {}, 将使用备用方案", e);
+                Ok(())
+            }
         }
     }
 
@@ -360,29 +381,49 @@ print(json.dumps(result, ensure_ascii=False))
         }
         
         // 计算本地文件校验和
-        let checksum = if verify_checksum {
+        let local_checksum = if verify_checksum {
             Some(self.calculate_file_checksum(shard_path).await?)
         } else {
             None
         };
         
-        // 使用iroh进行P2P传输
-        // 注意：这里需要连接到目标节点并发送文件
-        // 实际实现需要iroh的Blob发送功能
+        // 尝试使用 iroh 进行 P2P 传输
+        let manager_lock = self.manager.lock().await;
+        if let Some(ref manager) = *manager_lock {
+            match manager.send_file(target_node_id, shard_path).await {
+                Ok((file_size, sent_checksum)) => {
+                    log::info!("[DecentralizedModel] iroh P2P 传输成功: {} bytes", file_size);
+                    
+                    return Ok(serde_json::json!({
+                        "operation": "transfer",
+                        "shard_path": shard_path,
+                        "target_node_id": target_node_id,
+                        "checksum": local_checksum.unwrap_or(sent_checksum.clone()),
+                        "verified": verify_checksum,
+                        "status": "completed",
+                        "file_size_bytes": file_size,
+                        "transfer_method": "iroh_p2p",
+                        "message": format!("分片已通过 P2P 传输到节点 {}", target_node_id)
+                    }));
+                }
+                Err(e) => {
+                    log::warn!("[DecentralizedModel] iroh 传输失败: {}, 使用备用模式", e);
+                }
+            }
+        }
+        drop(manager_lock);
+        
+        // 备用方案：返回传输信息（需要外部协调）
         let result = serde_json::json!({
             "operation": "transfer",
             "shard_path": shard_path,
             "target_node_id": target_node_id,
-            "checksum": checksum,
+            "checksum": local_checksum,
             "verified": verify_checksum,
             "status": "initiated",
-            "message": format!("开始传输分片到节点 {}, 使用P2P连接", target_node_id)
+            "transfer_method": "manual",
+            "message": format!("传输分片到节点 {} - 需要手动复制或通过外部渠道", target_node_id)
         });
-        
-        // TODO: 集成iroh Blob发送
-        // 实际实现:
-        // let blob = iroh.blobs().write().await?;
-        // blob.send_to(target_peer_id, Ticket::new(...)).await?;
         
         Ok(result)
     }

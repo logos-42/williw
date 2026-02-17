@@ -1,416 +1,449 @@
-# williw 算力互通指南
+# williw 算力共享指南
 
-> **Mac MPS + Windows CUDA 算力共享** - 去中心化算力网络
+> **Mac MPS + Windows CUDA + Linux CUDA 算力共享** - 任务驱动的动态算力池
 
 ---
 
-## 架构说明
+## 什么是算力共享
 
-### 算力互通架构
+williw 的算力共享机制允许你：
+
+### 核心功能
+
+1. **单机算力共享**
+   - 在单设备上使用本地 GPU（MPS/CUDA）进行推理
+   - 自动选择最优 GPU 后端
+   - CPU 回退支持
+
+2. **局域网算力共享**
+   - 在多台设备间共享算力（Mac + Windows + Linux）
+   - 动态分配算力任务给最优设备
+   - 任务驱动的临时 Workers 机制
+
+3. **分布式推理**
+   - 模型自动切分（按层）
+   - 激活值在 Workers 间传递
+   - 结果自动集成
+
+---
+
+## 架构概览
+
+### 三层架构
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        你的算力网络                               │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    williw 算力共享架构                           │
+└─────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────┐              ┌─────────────────────┐
-│   Mac (M2/M3)       │              │   Windows (RTX 3080)│
-│   Apple Silicon     │              │   NVIDIA GPU        │
-│                     │              │                     │
-│  ┌───────────────┐  │              │  ┌───────────────┐  │
-│  │ Rust 节点      │  │              │  │ Rust 节点      │  │
-│  │ (Docker)      │  │              │  │ (Docker)      │  │
-│  └───────┬───────┘  │              │  └───────┬───────┘  │
-│          │          │              │          │          │
-│  ┌───────▼───────┐  │    P2P       │  ┌───────▼───────┐  │
-│  │ 算力注册服务   │◄─┼────通信────►│  │ 算力注册服务   │  │
-│  │ (Python)      │  │    :9236     │  │ (Python)      │  │
-│  └───────┬───────┘  │              │  └───────┬───────┘  │
-│          │          │              │          │          │
-│  ┌───────▼───────┐  │              │  ┌───────▼───────┐  │
-│  │ GPU 推理服务   │  │              │  │ GPU 推理服务   │  │
-│  │ (MPS 加速)     │  │              │  │ (CUDA 加速)    │  │
-│  └───────────────┘  │              │  └───────────────┘  │
-└─────────────────────┘              └─────────────────────┘
-         │                                    │
-         └──────────── 算力互通 ──────────────┘
-                     Mac MPS ↔ Windows CUDA
+┌─────────────────────┐
+│  用户接口层          │
+│  (Tauri App)        │  williw-master/src-tauri
+│                     │  - 用户请求
+│                     │  - 设备信息
+└──────────┬──────────┘
+           │ HTTP POST /api/inference
+           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  边缘服务器 (williw-workers/edge_server)                         │
+│  运行方式：宿主机直接运行（需要 GPU 访问）                          │
+│                                                                 │
+│  核心工作流:                                                    │
+│  1. 模型获取 (model_fetcher.py)                                 │
+│  2. 模型转换 (model_converter.py)                               │
+│  3. 算力估算 (compute_estimator.py) - 保守策略                   │
+│  4. 节点信息获取 (interface_layer/node_info_api.py)             │
+│  5. 算法层调用 (algorithms/)                                     │
+│     - 节点选择 (node_selection.py)                              │
+│     - 路径优化 (path_optimizer.py)                              │
+│     - 资源分配 (resource_allocator.py)                          │
+│     - 模型切分 (model_splitter.py)                              │
+│     - 任务调度 (task_scheduler.py)                              │
+│  6. 分布式推理 (models/inference_engine.py)                     │
+│  7. 结果集成 (models/result_merger.py)                          │
+└────────────┬────────────────────────────────────────────────────┘
+             │
+             ├────→ Worker A (层 1-4) → 退出
+             ├────→ Worker B (层 5-8) → 退出
+             └────→ Worker C (层 9-12) → 退出
+
+┌─────────────────────┐
+│  P2P 通信层          │
+│  (Rust + iroh)      │  williw-master/src
+│                     │  - 节点发现 (iroh)
+│                     │  - 拓扑管理
+│                     │  - **不参与算力调度**
+└─────────────────────┘
 ```
 
 ### 核心组件
 
-| 组件 | 端口 | 功能 |
-|------|------|------|
-| **Rust 节点** | 9235 | P2P 通信、AI 决策、拓扑管理 |
-| **算力注册服务** | 9236 | 算力发现、注册、调度 |
-| **GPU 推理服务** | 8000 | PyTorch 推理（MPS/CUDA） |
-
-### 算力发现机制
-
-```
-1. 广播发现
-   ┌─────────┐
-   │ 节点 A   │ ──UDP 广播──► 网络中的所有设备
-   └─────────┘
-
-2. 自动注册
-   ┌─────────┐      ┌─────────┐
-   │ 节点 A   │ ◄──► │ 节点 B   │  交换算力信息
-   └─────────┘      └─────────┘
-
-3. 算力调度
-   ┌─────────┐      ┌─────────┐
-   │ 节点 A   │ ──HTTP──► │ 节点 B   │  发送推理任务
-   └─────────┘      └─────────┘
-```
+| 组件 | 运行方式 | 端口 | 说明 |
+|------|---------|------|------|
+| **边缘服务器** | 宿主机 | 8080 | 算力调度中心 |
+| **Workers** | 临时进程 | - | 执行具体推理任务 |
+| **Rust 节点** | Docker 容器 | 9235 | P2P 通信（独立） |
 
 ---
 
 ## 快速开始
 
-### Step 1: 安装依赖
+### 前置条件
 
 ```bash
-# 所有平台
-pip install -r requirements-gpu.txt
+# 1. Python 3.8+
+python3 --version
 
-# Docker Desktop
+# 2. 安装依赖
+pip install -r williw-workers/requirements.txt
+
+# 3. Docker Desktop（可选，用于 Rust 节点）
 # https://www.docker.com/products/docker-desktop/
 ```
 
-### Step 2: 启动算力节点
+### 一键启动
 
 ```bash
-# Mac / Linux
-./start.sh --all
+# 启动边缘服务器（算力共享核心）
+cd williw-workers
+python -m edge_server.api_server --port 8080
 
-# Windows (PowerShell)
-.\start.ps1 -All
+# 或使用启动脚本
+./start.sh --workers
 ```
 
-### Step 3: 验证算力网络
+### 测试推理
 
 ```bash
-# 查看状态
-./start.sh --status
+# 健康检查
+curl http://localhost:8080/api/health
 
-# 运行演示
-python3 demo_compute_sharing.py
+# 发送推理请求
+curl -X POST http://localhost:8080/api/inference \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_name": "bert-base-uncased",
+    "model_source": "huggingface",
+    "input_data": {"text": "Hello world"},
+    "parameters": {"batch_size": 1}
+  }'
 ```
 
-**预期输出:**
-```
-============================================================
-  williw 算力互通演示
-============================================================
+### Python 客户端
 
-[步骤 1] 检查算力注册服务
-✅ 算力注册服务运行正常
-   节点 ID: abc12345
-   设备类型：mps
+```python
+from williw-workers.interface_layer.app_client import InferenceClient
 
-[步骤 3] 获取算力网络中的节点
-✅ 发现 2 个算力节点:
-   📍 节点 1: abc12345
-      设备：mps (Apple Silicon)
-      算力：8 单位，16 GB 内存
-   📡 节点 2: def67890
-      设备：cuda (NVIDIA GeForce RTX 3080)
-      算力：68 单位，24 GB 内存
+# 创建客户端
+client = InferenceClient("http://localhost:8080")
+
+# 发送推理请求
+result = client.inference(
+    model_name="bert-base-uncased",
+    input_data={"text": "Hello world"},
+    parameters={"batch_size": 1}
+)
+
+print(f"推理状态：{result['status']}")
+print(f"使用的节点：{result.get('nodes_used', [])}")
+print(f"推理时间：{result.get('inference_time', 0):.2f} ms")
 ```
 
 ---
 
-## 跨平台算力互通
+## 使用场景
 
-### 场景 1: Mac + Windows 协同
+### 场景 1: 单机推理（Mac MPS）
+
+```bash
+# Mac (M2/M3) 使用 MPS 加速
+./start.sh --workers
+
+# 测试
+python3 williw-workers/example_usage.py
+```
+
+**适用:**
+- 个人开发测试
+- 小模型推理
+- 能效优先场景
+
+---
+
+### 场景 2: 单机推理（Windows CUDA）
+
+```powershell
+# Windows (NVIDIA GPU) 使用 CUDA 加速
+.\start.ps1 -workers
+
+# 测试
+python williw-workers\example_usage.py
+```
+
+**适用:**
+- 大模型推理
+- 性能优先场景
+- 生产环境
+
+---
+
+### 场景 3: 局域网算力共享
 
 ```
 Mac (M2)                          Windows (RTX 3080)
 192.168.1.100                     192.168.1.101
 ┌─────────────────┐               ┌─────────────────┐
-│ AI 决策任务      │               │ GPU 推理任务     │
-│ MPS 可用算力：8   │               │ CUDA 可用算力：68│
+│ 边缘服务器      │               │ Worker 节点      │
+│ - 调度中心      │               │ - 执行推理      │
+│ - 算力估算      │               │ - 层 5-8        │
 └─────────────────┘               └─────────────────┘
 ```
 
-#### 在 Windows 上
+**配置:**
+```python
+# 在 Mac 上启动边缘服务器
+python -m edge_server.api_server --port 8080
 
-```powershell
-# 1. 启动所有服务
-.\start.ps1 -All
-
-# 2. 查看本机 IP
-ipconfig
-# 记录 IPv4 地址，例如：192.168.1.101
+# 在 Windows 上注册为 Worker
+curl -X POST http://192.168.1.100:8080/api/worker/register \
+  -d '{"worker_id": "win-worker-1", "gpu": "RTX 3080"}'
 ```
 
-#### 在 Mac 上
+**适用:**
+- 多设备协同
+- 算力互补
+- 降低成本
 
-```bash
-# 1. 启动所有服务
-./start.sh --all
+---
 
-# 2. 查看算力网络
-./start.sh --status
+## 核心机制
 
-# 3. 运行演示
-python3 demo_compute_sharing.py
-```
-
-### 场景 2: 多台设备算力池
+### Workers 生命周期
 
 ```
-┌─────────────┐
-│ Mac (M2)    │  8 算力单位
-└──────┬──────┘
-       │
-       ├─── 算力网络 ───┐
-       │                │
-┌──────▼──────┐   ┌─────▼──────┐
-│ Windows     │   │ Linux      │
-│ RTX 3080    │   │ RTX 4090   │
-│ 68 算力单位  │   │ 128 算力单位│
-└─────────────┘   └────────────┘
+1. Worker 启动
+   ↓
+2. 注册到边缘服务器
+   ↓
+3. 等待任务
+   ↓
+4. 接收任务（模型分片）
+   ↓
+5. 执行推理（前向传播）
+   ↓
+6. 返回结果（激活值）
+   ↓
+7. Worker 退出（资源释放）
+```
 
-总算力：204 单位
+### 算力估算（保守策略）
+
+```python
+# williw-workers/edge_server/compute_estimator.py
+
+# 1. 基础算力 = 参数量 × 2 (MAC 操作)
+base_compute = num_params * 2
+
+# 2. 激活值开销 = 基础算力 × 1.5
+activation_overhead = base_compute * 1.5
+
+# 3. 内存访问开销 = (基础 + 激活) × 1.3
+memory_overhead = (base_compute + activation_overhead) * 1.3
+
+# 4. 安全系数 = 总开销 × 1.5 (可算多不可算少)
+total_compute = memory_overhead * 1.5
+
+# 最终：约为基础算力的 3 倍
+```
+
+### 节点选择算法
+
+```python
+# williw-workers/algorithms/node_selection.py
+
+# 1. 过滤满足基本约束的节点
+- 在线状态
+- 空闲状态
+- GPU 可用性
+- 资源使用率
+
+# 2. 按算力排序
+compute_power = estimate_compute_power(node)
+
+# 3. 选择主节点（算力最强的前 N 个）
+primary_nodes = sorted_nodes[:num_primary]
+
+# 4. 选择备份节点
+backup_nodes = sorted_nodes[num_primary:num_primary+backup_count]
 ```
 
 ---
 
 ## API 参考
 
-### 算力注册服务 (端口 9236)
+### 边缘服务器 API (端口 8080)
 
-#### 获取算力列表
+#### POST /api/inference
 
-```bash
-curl http://localhost:9236/compute
+接收推理请求
+
+**请求体:**
+```json
+{
+    "model_name": "bert-base-uncased",
+    "model_source": "huggingface",
+    "input_data": {
+        "text": "Hello world"
+    },
+    "parameters": {
+        "batch_size": 1
+    }
+}
 ```
 
 **响应:**
 ```json
 {
-  "status": "success",
-  "total_nodes": 2,
-  "compute_nodes": [
-    {
-      "node_id": "abc12345",
-      "device_type": "mps",
-      "gpu_info": {"name": "Apple Silicon"},
-      "compute_units": 8,
-      "memory_gb": 16,
-      "available": true
-    },
-    {
-      "node_id": "def67890",
-      "device_type": "cuda",
-      "gpu_info": {"name": "NVIDIA RTX 3080"},
-      "compute_units": 68,
-      "memory_gb": 24,
-      "available": true,
-      "is_peer": true
-    }
-  ]
+    "status": "success",
+    "result": {...},
+    "nodes_used": ["worker-1", "worker-2"],
+    "inference_time": 123.45,
+    "model_shards": 3,
+    "total_compute": 5000.0
 }
 ```
 
-#### 注册算力
+#### POST /api/worker/register
 
-```bash
-curl -X POST http://localhost:9236/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "node_id": "my-node",
-    "device_type": "cuda",
-    "compute_units": 68,
-    "memory_gb": 24
-  }'
+注册 Worker
+
+**请求体:**
+```json
+{
+    "worker_id": "worker-1",
+    "capabilities": {
+        "device_type": "cuda",
+        "gpu_name": "RTX 3080",
+        "memory_gb": 24,
+        "compute_power": 68.0
+    }
+}
 ```
 
-#### 调度任务
+#### GET /api/health
 
-```bash
-curl -X POST http://localhost:9236/dispatch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_id": "task-001",
-    "task_type": "model_inference",
-    "target_node": "def67890"
-  }'
+健康检查
+
+**响应:**
+```json
+{
+    "status": "healthy",
+    "service": "williw-use-edge-server"
+}
 ```
 
-### GPU 推理服务 (端口 8000)
+#### GET /api/models
 
-#### 执行推理
-
-```bash
-curl -X POST http://localhost:8000/infer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input_text": "Hello, world!",
-    "max_length": 100
-  }'
-```
+列出可用模型
 
 ---
 
-## 算力调度策略
+## 算力共享流程
 
-### 自动选择
+### 完整工作流
 
-```python
-# 不指定目标节点，自动选择算力最强的
-curl -X POST http://localhost:9236/dispatch \
-  -d '{"task_type": "inference"}'
-
-# 响应：自动选择算力最强的节点
-{
-  "target_node": "def67890",  # RTX 3080
-  "task_id": "xxx"
-}
 ```
-
-### 指定节点
-
-```python
-# 指定使用 Mac 的 MPS
-curl -X POST http://localhost:9236/dispatch \
-  -d '{"task_type": "inference", "target_node": "abc12345"}'
-
-# 指定使用 Windows 的 CUDA
-curl -X POST http://localhost:9236/dispatch \
-  -d '{"task_type": "training", "target_node": "def67890"}'
+1. 用户发起推理请求
+   ↓
+2. 边缘服务器获取模型
+   - Hugging Face 下载
+   - 本地模型仓库加载
+   ↓
+3. 模型转换（如果需要）
+   - ONNX → PyTorch
+   - 读取 state_dict
+   ↓
+4. 算力估算（保守策略）
+   - 总算力需求
+   - 内存需求
+   - GPU 需求
+   ↓
+5. 获取可用节点
+   - 从 williw-master API
+   - 或模拟数据
+   ↓
+6. 节点选择算法
+   - 资源约束检查
+   - 算力估算
+   - 选择主节点和备份节点
+   ↓
+7. 模型切分
+   - 按层切分
+   - 分配给 Workers
+   ↓
+8. 分布式推理
+   Worker A (层 1-4)
+       ↓ 激活值
+   Worker B (层 5-8)
+       ↓ 激活值
+   Worker C (层 9-12)
+   ↓
+9. 结果集成
+   ↓
+10. 返回给用户
 ```
 
 ---
 
 ## 故障排查
 
-### 问题 1: 无法发现其他节点
+### 问题 1: 边缘服务器无法启动
 
 ```bash
-# 检查防火墙
-# Mac: 系统偏好设置 > 安全性 > 防火墙
-# Windows: Windows Defender 防火墙
+# 检查依赖
+pip list | grep -E "flask|torch"
 
-# 确保端口开放
-# - 9235/tcp, 9235/udp (P2P)
-# - 9236/tcp, 9236/udp (算力注册)
+# 重新安装
+pip install -r williw-workers/requirements.txt --force-reinstall
 
-# 测试广播
-python3 -c "
-import socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.sendto(b'test', ('255.255.255.255', 9236))
-print('广播已发送')
-"
+# 查看日志
+cat workers.log
 ```
 
-### 问题 2: Mac MPS 无法使用
+### 问题 2: 推理请求超时
 
 ```bash
-# 检查 PyTorch MPS 支持
-python3 -c "
-import torch
-print('MPS available:', torch.backends.mps.is_available())
-print('PyTorch version:', torch.__version__)
-"
+# 检查服务器状态
+curl http://localhost:8080/api/health
 
-# 确保使用 PyTorch 2.0+
-pip install --upgrade torch torchvision
+# 检查模型下载
+# 首次运行需要下载模型，可能需要较长时间
 ```
 
-### 问题 3: Windows CUDA 无法使用
-
-```powershell
-# 检查 NVIDIA 驱动
-nvidia-smi
-
-# 检查 PyTorch CUDA 支持
-python3 -c "
-import torch
-print('CUDA available:', torch.cuda.is_available())
-if torch.cuda.is_available():
-    print('GPU:', torch.cuda.get_device_name(0))
-}
-"
-
-# 重新安装 CUDA 版 PyTorch
-pip uninstall torch torchvision
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-```
-
----
-
-## 性能优化
-
-### Mac (Apple Silicon)
+### 问题 3: GPU 不可用
 
 ```bash
-# 启用 MPS 优化
-export PYTORCH_ENABLE_MPS_FALLBACK=1
+# Mac: 检查 MPS
+python3 -c "import torch; print(torch.backends.mps.is_available())"
 
-# 设置合理内存限制
-export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.8
+# Windows/Linux: 检查 CUDA
+python3 -c "import torch; print(torch.cuda.is_available())"
 ```
-
-### Windows (NVIDIA GPU)
-
-```powershell
-# 启用 Tensor Core
-# 在推理代码中使用
-# model.half()  # FP16
-
-# 监控 GPU 使用
-nvidia-smi dmon
-```
-
-### 算力分配建议
-
-| 任务类型 | 推荐设备 | 原因 |
-|---------|---------|------|
-| 大模型推理 | Windows (CUDA) | Tensor Core 加速 |
-| 小模型推理 | Mac (MPS) | 能效比高 |
-| 批量处理 | 多设备并行 | 算力池化 |
-| 实时推理 | 就近选择 | 低延迟 |
 
 ---
 
 ## 下一步
 
-### 监控算力网络
+### 进阶文档
 
-```bash
-# 实时查看算力状态
-watch -n 2 'curl -s http://localhost:9236/status | python3 -m json.tool'
-```
+- [Workers 机制详解](docs/COMPUTE_SHARING_WORKERS.md)
+- [算法层说明](docs/COMPUTE_SHARING_ALGORITHMS.md)
+- [使用示例](docs/COMPUTE_SHARING_EXAMPLES.md)
 
-### 添加更多节点
+### 相关文档
 
-```bash
-# 在任何设备上
-./start.sh --all
-
-# 自动加入算力网络
-# 通过 UDP 广播自动发现
-```
-
-### 自定义调度策略
-
-修改 `compute_registry.py` 中的调度逻辑：
-- 基于地理位置
-- 基于算力类型
-- 基于成本优化
-
----
-
-## 参考文档
-
-- [部署指南](docs/DEPLOYMENT.md)
-- [快速开始](QUICKSTART.md)
-- [PyTorch MPS](https://pytorch.org/docs/stable/notes/mps.html)
-- [NVIDIA CUDA](https://developer.nvidia.com/cuda-toolkit)
+- [部署指南](docs/WORKERS_DEPLOYMENT.md)
+- [架构总结](ARCHITECTURE_SUMMARY.md)
 
 ---
 

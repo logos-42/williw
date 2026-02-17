@@ -1,0 +1,57 @@
+# ===================================================================
+# williw 容器编排配置
+# ===================================================================
+#
+# 架构说明：
+# - Docker 容器：运行 Rust 节点（P2P 通信、AI 决策）
+# - 宿主机：运行 GPU 推理服务 / Workers 边缘服务器
+# - 两者通过 HTTP 通信
+#
+# 使用方式:
+#   docker compose up -d       # 启动节点
+#   docker compose down        # 停止节点
+#   docker compose logs -f     # 查看日志
+#
+
+services:
+  williw-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: williw-node
+    # 端口映射:
+    # 9235: P2P QUIC 通信端口 (iroh)
+    ports:
+      - "9235:9235/udp"
+      - "9235:9235/tcp"
+    environment:
+      - RUST_LOG=info
+      - WILLIW_DEVICE_TYPE=high
+      # 节点配置
+      - WILLIW_NODE_ID=${WILLIW_NODE_ID:-}
+      - WILLIW_MODEL_DIM=128
+      - WILLIW_CHECKPOINT_DIR=/home/williw/checkpoints
+      # Workers 边缘服务器地址（宿主机运行）
+      - WILLIW_WORKERS_EDGE_SERVER_URL=http://host.docker.internal:8080
+    volumes:
+      - williw-data:/home/williw/data
+      - williw-checkpoints:/home/williw/checkpoints
+    # 使用 host 网络模式（更适合 P2P 通信）
+    # 注意：host 模式下端口不需要映射
+    network_mode: host
+    # 重启策略
+    restart: unless-stopped
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # 额外 hosts（用于访问宿主机服务）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  williw-data:
+  williw-checkpoints:

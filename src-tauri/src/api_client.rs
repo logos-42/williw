@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use crate::state::{DeviceInfo, ModelConfig, TrainingStatus};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 /// Workers后端API客户端
 pub struct WorkersApiClient {
@@ -599,10 +599,97 @@ impl WorkersApiClient {
         let response = self.client
             .get(&url)
             .send()
-            .await?;
+            .await
+            .map_err(|e| anyhow!("轮询消息失败：{}", e))?;
 
         let messages_response: WorkersMessagesResponse = response.json().await?;
         Ok(messages_response)
+    }
+
+    /// 注册 iroh 节点到 Workers 后端 (/api/iroh-node/register)
+    pub async fn register_iroh_node(
+        &self,
+        node_data: serde_json::Value,
+    ) -> Result<ApiResponse> {
+        let url = format!("{}/api/iroh-node/register", self.base_url);
+        
+        let response = self.client
+            .post(&url)
+            .json(&node_data)
+            .send()
+            .await
+            .map_err(|e| anyhow!("HTTP 请求失败：{}", e))?;
+
+        let api_response: ApiResponse = response
+            .json()
+            .await
+            .map_err(|e| anyhow!("解析响应失败：{}", e))?;
+
+        Ok(api_response)
+    }
+
+    /// 获取所有可用节点 (/api/nodes)
+    pub async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
+        let url = format!("{}/api/nodes", self.base_url);
+        
+        let response = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| anyhow!("HTTP 请求失败：{}", e))?;
+
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow!("解析响应失败：{}", e))?;
+
+        let nodes_data = result["nodes"]
+            .as_array()
+            .ok_or_else(|| anyhow!("nodes 字段格式错误"))?;
+
+        let mut nodes: Vec<NodeInfo> = Vec::new();
+        for node_data in nodes_data {
+            // 转换为 NodeInfo
+            let node = NodeInfo {
+                node_id: node_data["node_id"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
+                endpoint: node_data
+                    .get("endpoint")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                capabilities: NodeCapabilities {
+                    max_memory_gb: node_data
+                        .get("gpu_memory")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0),
+                    gpu_type: node_data
+                        .get("gpu_available")
+                        .and_then(|v| v.as_bool())
+                        .map(|b| if b { "Unknown" } else { "" }.to_string()),
+                    gpu_memory_gb: node_data
+                        .get("gpu_memory")
+                        .and_then(|v| v.as_f64()),
+                    cpu_cores: 4, // 简化，实际应从节点数据获取
+                    network_bandwidth_mbps: 1000,
+                    supported_models: vec![],
+                },
+                current_load: node_data
+                    .get("current_load")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.5) as f32,
+                latency: None,
+                reliability: node_data
+                    .get("reliability_score")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.95) as f32,
+            };
+            nodes.push(node);
+        }
+
+        Ok(nodes)
     }
 
     /// 上报任务执行结果

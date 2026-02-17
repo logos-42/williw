@@ -442,3 +442,82 @@ pub async fn handle_ai_node_connection(
         }))
     }
 }
+
+/// Register iroh node to workers backend (/api/iroh-node/register)
+#[tauri::command]
+pub async fn register_iroh_node_to_workers(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // 获取 iroh 节点 ID
+    let node_guard = state.node.lock();
+    let node = node_guard.as_ref()
+        .ok_or("Node not running")?;
+    
+    let iroh_node_id = node.comms.node_id().to_string();
+    let endpoint = node.comms.local_addr()
+        .unwrap_or_else(|_| "localhost:8080".to_string());
+    
+    // 获取设备信息
+    let device_info = state.device_info.lock().clone()
+        .ok_or_else(|| "No device info available".to_string())?;
+    
+    // 构建注册数据
+    let register_data: serde_json::Value = serde_json::json!({
+        "node_id": iroh_node_id,
+        "endpoint": endpoint,
+        "device_info": {
+            "gpu_type": device_info.gpu_type,
+            "gpu_memory_total": device_info.gpu_memory_total,
+            "cpu_cores": device_info.cpu_cores,
+            "max_memory_mb": device_info.total_memory_gb * 1024.0,
+            "battery_level": device_info.battery_level.unwrap_or(100.0),
+            "is_charging": device_info.is_charging.unwrap_or(false),
+        },
+        "iroh_node": {
+            "node_id": iroh_node_id,
+            "addresses": vec![],
+        }
+    });
+    
+    // 发送到边缘服务器
+    match state.api_client.register_iroh_node(register_data).await {
+        Ok(response) => {
+            if response.success {
+                Ok(format!("✅ iroh 节点注册成功：{}", iroh_node_id))
+            } else {
+                Err(format!("注册失败：{}", response.message))
+            }
+        }
+        Err(e) => Err(format!("网络错误：{}", e)),
+    }
+}
+
+/// Get all available nodes from workers backend (/api/nodes)
+#[tauri::command]
+pub async fn get_available_nodes_from_workers(
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    match state.api_client.get_nodes().await {
+        Ok(nodes) => {
+            let nodes_json: Vec<serde_json::Value> = nodes.iter().map(|node| {
+                serde_json::json!({
+                    "node_id": node.node_id,
+                    "endpoint": node.endpoint,
+                    "max_memory_gb": node.capabilities.max_memory_gb,
+                    "gpu_type": node.capabilities.gpu_type,
+                    "gpu_memory_gb": node.capabilities.gpu_memory_gb,
+                    "cpu_cores": node.capabilities.cpu_cores,
+                    "current_load": node.current_load,
+                    "reliability": node.reliability,
+                })
+            }).collect();
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "nodes": nodes_json,
+                "total": nodes_json.len()
+            }))
+        }
+        Err(e) => Err(format!("获取节点失败：{}", e)),
+    }
+}

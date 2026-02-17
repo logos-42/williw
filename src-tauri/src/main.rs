@@ -20,6 +20,8 @@ use commands::training_commands::{
 use commands::workers_commands::{
     poll_workers_messages,
     handle_ai_node_connection,
+    register_iroh_node_to_workers,
+    get_available_nodes_from_workers,
 };
 use commands::node_commands::{
     get_node_info,
@@ -207,6 +209,8 @@ async fn main() {
             download_default_model,
             update_api_key_name,
             ai_download_and_split_model,
+            register_iroh_node_to_workers,
+            get_available_nodes_from_workers,
         ])
         .setup(|app| {
             // Initialize event handlers

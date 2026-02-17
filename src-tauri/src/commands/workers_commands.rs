@@ -448,37 +448,40 @@ pub async fn handle_ai_node_connection(
 pub async fn register_iroh_node_to_workers(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    // 获取 iroh 节点 ID
-    let node_guard = state.node.lock();
-    let node = node_guard.as_ref()
-        .ok_or("Node not running")?;
-    
-    let iroh_node_id = node.comms.node_id().to_string();
-    let endpoint = node.comms.local_addr()
-        .unwrap_or_else(|_| "localhost:8080".to_string());
-    
-    // 获取设备信息
-    let device_info = state.device_info.lock().clone()
-        .ok_or_else(|| "No device info available".to_string())?;
-    
+    // 获取 iroh 节点 ID 和设备信息（在 await 之前释放锁）
+    let (iroh_node_id, endpoint, device_info) = {
+        let node_guard = state.node.lock();
+        let node = node_guard.as_ref()
+            .ok_or("Node not running")?;
+
+        let iroh_node_id = node.comms.node_id().to_string();
+        let endpoint = node.comms.local_addr()
+            .unwrap_or_else(|_| "localhost:8080".to_string());
+        
+        let device_info = state.device_info.lock().clone()
+            .ok_or_else(|| "No device info available".to_string())?;
+        
+        (iroh_node_id, endpoint, device_info)
+    }; // 锁在这里释放
+
     // 构建注册数据
-    let register_data: serde_json::Value = serde_json::json!({
+    let register_data = serde_json::json!({
         "node_id": iroh_node_id,
         "endpoint": endpoint,
         "device_info": {
-            "gpu_type": device_info.gpu_type,
-            "gpu_memory_total": device_info.gpu_memory_total,
+            "gpu_type": device_info.gpu_type.clone().unwrap_or_default(),
+            "gpu_memory_total": device_info.gpu_memory_total.unwrap_or(0.0),
             "cpu_cores": device_info.cpu_cores,
-            "max_memory_mb": device_info.total_memory_gb * 1024.0,
+            "max_memory_mb": (device_info.total_memory_gb * 1024.0) as i64,
             "battery_level": device_info.battery_level.unwrap_or(100.0),
-            "is_charging": device_info.is_charging.unwrap_or(false),
+            "is_charging": device_info.is_charging.unwrap_or(false)
         },
         "iroh_node": {
-            "node_id": iroh_node_id,
-            "addresses": vec![],
+            "node_id": iroh_node_id.clone(),
+            "addresses": Vec::<String>::new()
         }
     });
-    
+
     // 发送到边缘服务器
     match state.api_client.register_iroh_node(register_data).await {
         Ok(response) => {

@@ -281,6 +281,57 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
               管理您的 API 密钥，用于访问去中心化训练服务
             </Typography>
 
+            {/* ── 推理 API 端点展示卡片 ── */}
+            <Box sx={{
+              mb: 3, p: 2,
+              borderRadius: 1.5,
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+              background: alpha(theme.palette.primary.main, 0.05),
+            }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.68rem' }}>
+                推理 API 端点
+              </Typography>
+              {/* OpenAI-compatible endpoint */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box sx={{
+                  flex: 1,
+                  px: 1.5, py: 0.8,
+                  borderRadius: 1,
+                  background: alpha(theme.palette.background.default, 0.6),
+                  border: `1px solid ${theme.palette.divider}`,
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem',
+                  color: theme.palette.text.primary,
+                  wordBreak: 'break-all',
+                }}>
+                  http://localhost:11434/v1/chat/completions
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ whiteSpace: 'nowrap', minWidth: 56, fontSize: '0.75rem' }}
+                  onClick={() => navigator.clipboard.writeText('http://localhost:11434/v1/chat/completions')}
+                >
+                  复制
+                </Button>
+              </Box>
+              {/* 使用说明 */}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                兼容 OpenAI API 格式，在请求头中携带您的密钥：
+              </Typography>
+              <Box sx={{
+                px: 1.5, py: 0.8,
+                borderRadius: 1,
+                background: alpha(theme.palette.background.default, 0.6),
+                border: `1px solid ${theme.palette.divider}`,
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: alpha(theme.palette.text.primary, 0.75),
+              }}>
+                Authorization: Bearer &lt;your-api-key&gt;
+              </Box>
+            </Box>
+
             {apiKeys.length > 0 ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {apiKeys.map((apiKey) => (

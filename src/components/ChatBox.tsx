@@ -159,8 +159,16 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
     try {
       let result: { success: boolean; message: string };
 
-      if (activeSession) {
-        // Route through distributed model with model context in system prompt
+      if (activeSession?.inferenceEndpoint) {
+        // AI agent configured a local endpoint — route directly there
+        result = await invoke<{ success: boolean; message: string }>('chat_with_local_endpoint', {
+          message: currentInput,
+          endpoint: activeSession.inferenceEndpoint,
+          modelName: activeSession.localModelName ?? activeSession.modelName,
+          systemPrompt: `你是 ${activeSession.modelName}，一个运行在本机的大语言模型。请用中文回复。`,
+        });
+      } else if (activeSession) {
+        // No local endpoint yet — fall back to external API with model context in system prompt
         result = await invoke<{ success: boolean; message: string }>('chat_with_distributed_model', {
           message: currentInput,
           modelName: activeSession.modelName,
@@ -191,13 +199,44 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
 
     } catch (error: any) {
       console.error('AI 推理失败:', error);
+      const errStr = String(error?.message ?? error ?? '');
+
+      // 根据错误类型和当前模式给出不同的提示
+      let errorContent: string;
+
+      if (activeSession?.inferenceEndpoint) {
+        // 本地推理模式下的错误
+        if (errStr.includes('502') || errStr.includes('Bad Gateway')) {
+          errorContent =
+            '⚠️ 本地模型加载失败（502 Bad Gateway）\n\n可能原因：\n' +
+            '• Ollama 正在加载模型（首次需要 5-10 秒）\n' +
+            '• Intel Mac MLX GPU 不兼容\n\n' +
+            '解决方法（在终端运行）：\n' +
+            '  pkill ollama\n' +
+            '  OLLAMA_NUM_GPU=0 /Applications/Ollama.app/Contents/Resources/ollama serve &\n\n' +
+            '重启后再次发送消息即可。';
+        } else if (errStr.includes('Connection refused') || errStr.includes('请求失败')) {
+          errorContent =
+            '⚠️ 无法连接到本地推理服务\n\n' +
+            'Ollama 可能已停止运行。请在终端运行：\n' +
+            '  OLLAMA_NUM_GPU=0 /Applications/Ollama.app/Contents/Resources/ollama serve &';
+        } else {
+          errorContent = `本地推理出错：${errStr}\n\n端点: ${activeSession.inferenceEndpoint}\n模型: ${activeSession.localModelName ?? activeSession.modelName}`;
+        }
+      } else if (activeSession) {
+        // 分布式/外部API模式
+        errorContent = `推理失败：${errStr}`;
+      } else if (!hasApiConfig) {
+        errorContent = '请先在右上角「设置」中配置 AI API（OpenAI、DeepSeek 等），然后才能开始对话。';
+      } else {
+        errorContent = `请求失败：${errStr}。请检查 API 配置是否正确。`;
+      }
+
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.id !== thinkingMessage.id);
         return [...filtered, {
           id: `error-${Date.now()}`,
-          content: hasApiConfig
-            ? `请求失败：${error.message || '未知错误'}。请检查 API 配置是否正确。`
-            : '请先在右上角设置中配置 AI API（OpenAI、DeepSeek 等），然后才能开始对话。',
+          content: errorContent,
           sender: 'assistant',
           timestamp: new Date(),
         }];

@@ -9,6 +9,7 @@ pub mod workflow_commands;
 pub mod external_api_commands;
 pub mod ai_decision_commands;
 pub mod model_commands;
+pub mod agent_commands;
 
 // Re-export all commands for easy access
 pub use training_commands::*;
@@ -21,3 +22,4 @@ pub use workflow_commands::*;
 pub use external_api_commands::*;
 pub use ai_decision_commands::*;
 pub use model_commands::*;
+pub use agent_commands::*;

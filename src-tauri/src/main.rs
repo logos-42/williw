@@ -26,6 +26,7 @@ use commands::workers_commands::{
 use commands::node_commands::{
     get_node_info,
     get_connected_peers,
+    get_distributed_node_status,
 };
 use commands::model_device_commands::{
     get_device_info,
@@ -60,6 +61,12 @@ use commands::workflow_commands::{
     start_document_driven_workflow,
     get_workflow_status,
     check_setup_status,
+};
+use commands::agent_commands::{
+    run_ai_agent_setup,
+    chat_with_local_endpoint,
+    quick_start_local_inference,
+    warmup_local_model,
 };
 
 use tauri::Emitter;
@@ -225,6 +232,11 @@ async fn main() {
             start_document_driven_workflow,
             get_workflow_status,
             check_setup_status,
+            run_ai_agent_setup,
+            chat_with_local_endpoint,
+            quick_start_local_inference,
+            warmup_local_model,
+            get_distributed_node_status,
         ])
         .setup(|app| {
             // 启动时加载持久化的外部 API 配置

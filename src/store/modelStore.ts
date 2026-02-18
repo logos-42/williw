@@ -31,6 +31,13 @@ export interface ActiveInferenceSession {
   isLocalOnly: boolean;
   /** When the session was activated */
   activatedAt: Date;
+  /**
+   * Local inference endpoint discovered by the AI agent, e.g. "http://localhost:11434/v1"
+   * When set, ChatBox routes messages here instead of the external API.
+   */
+  inferenceEndpoint?: string;
+  /** Model name to use on the local endpoint, e.g. "qwen2.5:7b" */
+  localModelName?: string;
 }
 
 interface ModelStore {

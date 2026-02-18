@@ -229,7 +229,7 @@ impl WorkersApiClient {
     /// 创建新的API客户端
     pub fn new(base_url: String) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(8))
             .build()
             .expect("Failed to create HTTP client");
         

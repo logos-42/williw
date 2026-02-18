@@ -42,6 +42,9 @@ use commands::external_api_commands::{
     delete_external_api,
     test_external_api,
     chat_with_external_api,
+    chat_with_distributed_model,
+    toggle_external_api,
+    test_workflow_event,
 };
 use commands::gpu_commands::{
     check_deploy_status,
@@ -52,6 +55,11 @@ use commands::gpu_commands::{
 };
 use commands::ai_decision_commands::{
     ai_download_and_split_model,
+};
+use commands::workflow_commands::{
+    start_document_driven_workflow,
+    get_workflow_status,
+    check_setup_status,
 };
 
 use tauri::Emitter;
@@ -211,8 +219,24 @@ async fn main() {
             ai_download_and_split_model,
             register_iroh_node_to_workers,
             get_available_nodes_from_workers,
+            toggle_external_api,
+            test_workflow_event,
+            chat_with_distributed_model,
+            start_document_driven_workflow,
+            get_workflow_status,
+            check_setup_status,
         ])
         .setup(|app| {
+            // 启动时加载持久化的外部 API 配置
+            {
+                let app_state = app.handle().state::<AppState>();
+                let saved_apis = commands::external_api_commands::load_apis_from_disk(app.handle());
+                if !saved_apis.is_empty() {
+                    log::info!("[Startup] 从磁盘加载了 {} 个外部 API 配置", saved_apis.len());
+                    *app_state.external_apis.lock() = saved_apis;
+                }
+            }
+
             // Initialize event handlers
             events::setup_event_handlers(app.handle().clone())?;
 

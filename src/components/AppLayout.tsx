@@ -6,7 +6,9 @@ import { SettingsPanel } from './SettingsPanel';
 import { Resizer } from './Resizer';
 import { LeftPanel } from './LeftPanel';
 import { RightPanel } from './RightPanel';
+import { OnboardingDialog } from './OnboardingDialog';
 import { useTrainingStore } from '../store/trainingStore';
+import { invoke } from '@tauri-apps/api/core';
 
 console.log('=== AppLayout loading ===')
 
@@ -16,7 +18,25 @@ export const AppLayout: React.FC = () => {
   const [splitPercentage, setSplitPercentage] = useState(70); // 左侧初始占比70%
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const splitPercentageRef = useRef(splitPercentage);
+
+  // 检查是否首次启动（没有配置外部 API）
+  useEffect(() => {
+    const checkFirstRun = async () => {
+      try {
+        const apis = await invoke<any[]>('get_external_apis');
+        const hasEnabled = apis.some((api: any) => api.enabled && api.api_key);
+        if (!hasEnabled) {
+          // 延迟 1.5 秒显示欢迎引导，等页面先渲染好
+          setTimeout(() => setShowOnboarding(true), 1500);
+        }
+      } catch {
+        setTimeout(() => setShowOnboarding(true), 1500);
+      }
+    };
+    checkFirstRun();
+  }, []);
 
   // 同步 splitPercentage 到 ref
   useEffect(() => {
@@ -127,6 +147,12 @@ export const AppLayout: React.FC = () => {
 
       {/* 设置面板 */}
       {isSettingsOpen && <SettingsPanel onClose={closeSettings} />}
+
+      {/* 首次启动引导弹窗 */}
+      <OnboardingDialog
+        open={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
     </Box>
   );
 };

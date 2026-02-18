@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   TextField,
   IconButton,
   Typography,
@@ -22,10 +23,13 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import InfoIcon from '@mui/icons-material/Info';
-import BugReportIcon from '@mui/icons-material/BugReport';
+import SettingsIcon from '@mui/icons-material/Settings';
+import HubIcon from '@mui/icons-material/Hub';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import CloseIcon from '@mui/icons-material/Close';
 import { useModelStore } from '../store/modelStore';
 import { useWorkflowStore } from '../store/workflowStore';
-import { runInference, InferenceRequest } from '../services/inferenceService';
+import { useTrainingStore } from '../store/trainingStore';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -48,9 +52,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [hasApiConfig, setHasApiConfig] = useState<boolean | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { inferenceResult, isInferenceLoading } = useModelStore();
-  const { status, addMessage } = useWorkflowStore();
+  const { addMessage } = useWorkflowStore();
+  const { openSettings } = useTrainingStore();
+  const { activeSession, clearActiveSession } = useModelStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,43 +66,30 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
     scrollToBottom();
   }, [messages]);
 
-  // 监听推理结果，自动添加到聊天框（仅用于ModelSelector的初始推理）
+  // 检查是否有配置的外部 API
   useEffect(() => {
-    if (inferenceResult && !isInferenceLoading && messages.length === 0) {
-      const assistantMessage: ChatMessage = {
-        id: `inference-${Date.now()}`,
-        content: `模型已准备就绪！\n\n请求ID: ${inferenceResult.request_id || 'N/A'}\n分配节点数: ${inferenceResult.selected_nodes?.length || 0}\n预计总时间: ${inferenceResult.estimated_total_time || 0}ms\n\n${inferenceResult.result || '模型已加载，可以开始对话了！'}`,
-        sender: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-    }
-  }, [inferenceResult, isInferenceLoading, messages.length]);
-
-  // 监听推理开始，显示加载消息（仅用于ModelSelector的初始推理）
-  useEffect(() => {
-    if (isInferenceLoading && messages.length === 0) {
-      const loadingMessage: ChatMessage = {
-        id: `loading-${Date.now()}`,
-        content: '正在加载AI模型，请稍候...',
-        sender: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, loadingMessage]);
-    }
-  }, [isInferenceLoading, messages.length]);
+    const checkApiConfig = async () => {
+      try {
+        const apis = await invoke<any[]>('get_external_apis');
+        const enabled = apis.filter((api: any) => api.enabled && api.api_key);
+        setHasApiConfig(enabled.length > 0);
+      } catch {
+        setHasApiConfig(false);
+      }
+    };
+    checkApiConfig();
+    // 每 5 秒检查一次（用户可能在设置中配置了API）
+    const interval = setInterval(checkApiConfig, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 监听工作流消息事件
   useEffect(() => {
-    console.log('🔧 [ChatBox] Setting up workflow listeners...');
     let unlistenFn: any = null;
 
     const setupWorkflowListeners = async () => {
       try {
-        console.log('🔧 [ChatBox] Calling listen()...');
-        // 监听工作流消息
         unlistenFn = await listen('workflow-message', (event: any) => {
-          console.log('📨 [ChatBox] Received workflow-message event:', event);
           const { type, content, progress } = event.payload as {
             type: string;
             content: string;
@@ -112,7 +105,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
             workflowProgress: progress,
           };
 
-          console.log('💬 [ChatBox] Adding workflow message:', workflowMessage);
           setMessages(prev => [...prev, workflowMessage]);
           addMessage({
             type: type as any,
@@ -120,8 +112,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
             timestamp: new Date(),
           });
         });
-
-        console.log('✅ [ChatBox] Workflow listeners registered successfully');
       } catch (error) {
         console.error('❌ [ChatBox] Failed to setup workflow listeners:', error);
       }
@@ -130,28 +120,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
     setupWorkflowListeners();
 
     return () => {
-      console.log('🔧 [ChatBox] Cleaning up workflow listeners...');
       if (unlistenFn) {
         unlistenFn();
       }
     };
   }, [addMessage]);
-
-  // 监听工作流完成状态
-  useEffect(() => {
-    if (status.isCompleted && messages.length > 0) {
-      // 工作流完成后，自动添加欢迎消息
-      setTimeout(() => {
-        const welcomeMessage: ChatMessage = {
-          id: `welcome-${Date.now()}`,
-          content: '🎉 现在可以开始与AI对话了！请输入您的问题或任务。',
-          sender: 'assistant',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, welcomeMessage]);
-      }, 2000);
-    }
-  }, [status.isCompleted, messages.length]);
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isAiThinking) return;
@@ -167,73 +140,64 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
     const currentInput = inputText.trim();
     setInputText('');
 
-    // 只在首次发送消息时展开聊天框
-    if (messages.length === 0) {
+    if (messages.filter(m => m.sender === 'user').length === 0) {
       onExpand?.();
     }
 
-    // 显示AI思考状态
     setIsAiThinking(true);
-    
-    // 添加思考中的消息
+
     const thinkingMessage: ChatMessage = {
       id: `thinking-${Date.now()}`,
-      content: 'AI正在思考...',
+      content: activeSession
+        ? `${activeSession.modelName} 推理中...`
+        : '正在思考...',
       sender: 'assistant',
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, thinkingMessage]);
 
     try {
-      // 首先尝试使用外部 API
-      let result: { result?: string; error?: string } | null = null;
-      let useExternalApi = false;
-      
-      try {
-        const externalResult = await invoke<{ success: boolean; message: string }>('chat_with_external_api', {
+      let result: { success: boolean; message: string };
+
+      if (activeSession) {
+        // Route through distributed model with model context in system prompt
+        result = await invoke<{ success: boolean; message: string }>('chat_with_distributed_model', {
+          message: currentInput,
+          modelName: activeSession.modelName,
+          modelRepo: activeSession.modelRepo,
+          params: activeSession.params,
+          totalLayers: activeSession.totalLayers,
+          isLocalOnly: activeSession.isLocalOnly,
+          nodeCount: activeSession.splitPlan.length,
+        });
+      } else {
+        // No active session: use plain external API
+        result = await invoke<{ success: boolean; message: string }>('chat_with_external_api', {
           message: currentInput,
         });
-        if (externalResult.success) {
-          result = { result: externalResult.message };
-          useExternalApi = true;
-        }
-      } catch (externalError) {
-        console.log('外部 API 不可用，回退到本地 GPU:', externalError);
-      }
-      
-      // 如果外部 API 失败或未配置，使用本地 GPU
-      if (!useExternalApi) {
-        const modelPath = 'D:\\AI\\去中心化训练\\test_models\\models--LiquidAI--LFM2.5-1.2B-Thinking\\snapshots\\1c9725ba97f047b37bcf53e44e9133ccf1f79333';
-        
-        const inferenceRequest: InferenceRequest = {
-          model_path: modelPath,
-          input_text: currentInput,
-          max_length: 150
-        };
-
-        result = await runInference(inferenceRequest);
       }
 
-      // 移除思考中的消息并添加AI回复
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.id !== thinkingMessage.id);
         return [...filtered, {
           id: `ai-${Date.now()}`,
-          content: result?.result || '抱歉，我无法生成回复。',
+          content: result.success
+            ? result.message
+            : '抱歉，AI 无法回复。请在设置中配置外部 API（如 OpenAI、DeepSeek）。',
           sender: 'assistant',
           timestamp: new Date(),
         }];
       });
 
     } catch (error: any) {
-      console.error('AI推理失败:', error);
-      
-      // 移除思考中的消息并添加错误消息
+      console.error('AI 推理失败:', error);
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.id !== thinkingMessage.id);
         return [...filtered, {
           id: `error-${Date.now()}`,
-          content: `抱歉，出现了错误：${error.message || '未知错误'}。请确保GPU服务器正在运行或已配置外部 API。`,
+          content: hasApiConfig
+            ? `请求失败：${error.message || '未知错误'}。请检查 API 配置是否正确。`
+            : '请先在右上角设置中配置 AI API（OpenAI、DeepSeek 等），然后才能开始对话。',
           sender: 'assistant',
           timestamp: new Date(),
         }];
@@ -273,11 +237,111 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
         }}
       >
         <CardContent sx={{ p: 1.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <>
-            <Box sx={{ flex: 1, overflow: 'auto', mb: 1.5, minHeight: 0 }}>
+          {/* 活跃推理会话横幅：显示当前激活的模型 */}
+          {activeSession && (
+            <Box
+              sx={{
+                mb: 1,
+                px: 1.5,
+                py: 0.75,
+                borderRadius: 1,
+                background: alpha(theme.palette.primary.main, 0.08),
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.25)}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              {activeSession.isLocalOnly
+                ? <SmartToyIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                : <AccountTreeIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+              }
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                  {activeSession.modelName}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                  {activeSession.isLocalOnly
+                    ? '本机运行'
+                    : `分布式 · ${activeSession.splitPlan.length} 节点`
+                  }
+                </Typography>
+                {!activeSession.isLocalOnly && (
+                  <Box sx={{ display: 'flex', gap: 0.5, mt: 0.3, flexWrap: 'wrap' }}>
+                    {activeSession.splitPlan.map((n) => (
+                      <Chip
+                        key={n.fullId}
+                        size="small"
+                        icon={<HubIcon style={{ fontSize: 10 }} />}
+                        label={`${n.shortId} L${n.layers[0]}-${n.layers[1]}`}
+                        sx={{ height: 16, fontSize: '0.6rem', '& .MuiChip-label': { px: 0.5 } }}
+                        color={n.isLocal ? 'primary' : 'default'}
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                )}
+              </Box>
+              <IconButton
+                size="small"
+                onClick={clearActiveSession}
+                sx={{ p: 0.3, color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
+              >
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Box>
+          )}
+
+          {/* 未配置 API 的提示横幅 */}
+          {hasApiConfig === false && (
+            <Box
+              sx={{
+                mb: 1.5,
+                p: 1.5,
+                borderRadius: 1,
+                background: alpha(theme.palette.warning.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.warning.main, 0.3)}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <InfoIcon sx={{ fontSize: 16, color: 'warning.main', flexShrink: 0 }} />
+              <Typography variant="caption" sx={{ flex: 1, color: 'warning.light' }}>
+                请先配置 AI API 才能对话
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<SettingsIcon sx={{ fontSize: 14 }} />}
+                onClick={openSettings}
+                sx={{ fontSize: '0.7rem', py: 0.3, px: 1, borderColor: 'warning.main', color: 'warning.main' }}
+              >
+                去配置
+              </Button>
+            </Box>
+          )}
+
+          <Box sx={{ flex: 1, overflow: 'auto', mb: 1.5, minHeight: 0 }}>
             {messages.length === 0 ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
-                <Typography variant="body2">开始对话...</Typography>
+              <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 1,
+                color: 'text.secondary',
+              }}>
+                <SmartToyIcon sx={{ fontSize: 40, opacity: 0.3 }} />
+                <Typography variant="body2" sx={{ opacity: 0.6 }}>
+                  {activeSession
+                    ? `${activeSession.modelName} 已就绪，开始对话...`
+                    : hasApiConfig
+                    ? '开始对话...'
+                    : '配置 API 后即可开始对话'}
+                </Typography>
               </Box>
             ) : (
               <List sx={{ p: 0 }}>
@@ -311,6 +375,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                           : message.sender === 'workflow'
                           ? theme.palette.info.main
                           : theme.palette.secondary.main,
+                        flexShrink: 0,
                       }}
                     >
                       {message.sender === 'user' ? (
@@ -341,67 +406,50 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                                 )
                               : alpha(theme.palette.secondary.main, 0.1),
                             border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
-                            maxWidth: '70%',
+                            maxWidth: '80%',
+                            display: 'inline-block',
                           }}
                         >
                           {message.sender === 'workflow' && (
                             <>
                               {message.workflowType === 'success' && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                  <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                                  <Typography variant="caption" color="success.main">
-                                    完成
-                                  </Typography>
+                                  <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
+                                  <Typography variant="caption" color="success.main">完成</Typography>
                                 </Box>
                               )}
                               {message.workflowType === 'error' && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                  <ErrorIcon sx={{ fontSize: 16, color: 'error.main' }} />
-                                  <Typography variant="caption" color="error.main">
-                                    错误
-                                  </Typography>
+                                  <ErrorIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                                  <Typography variant="caption" color="error.main">错误</Typography>
                                 </Box>
                               )}
                               {message.workflowType === 'progress' && (
                                 <>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                    <AutoFixHighIcon sx={{ fontSize: 16, color: 'info.main' }} />
-                                    <Typography variant="caption" color="info.main">
-                                      AI工作流
-                                    </Typography>
+                                    <AutoFixHighIcon sx={{ fontSize: 14, color: 'info.main' }} />
+                                    <Typography variant="caption" color="info.main">AI 工作流</Typography>
                                   </Box>
                                   {message.workflowProgress !== undefined && (
-                                    <Box sx={{ mt: 0.5 }}>
-                                      <LinearProgress
-                                        variant="determinate"
-                                        value={message.workflowProgress * 100}
-                                        sx={{
-                                          height: 4,
-                                          borderRadius: 2,
-                                          background: alpha(theme.palette.info.main, 0.1),
-                                        }}
-                                      />
-                                    </Box>
+                                    <LinearProgress
+                                      variant="determinate"
+                                      value={message.workflowProgress * 100}
+                                      sx={{ height: 3, borderRadius: 2, mt: 0.5, background: alpha(theme.palette.info.main, 0.1) }}
+                                    />
                                   )}
                                 </>
                               )}
                               {message.workflowType === 'info' && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                  <InfoIcon sx={{ fontSize: 16, color: 'info.main' }} />
-                                  <Typography variant="caption" color="info.main">
-                                    信息
-                                  </Typography>
+                                  <InfoIcon sx={{ fontSize: 14, color: 'info.main' }} />
+                                  <Typography variant="caption" color="info.main">信息</Typography>
                                 </Box>
                               )}
                             </>
                           )}
                           <Typography
                             variant="body2"
-                            sx={{
-                              fontSize: '0.875rem',
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                            }}
+                            sx={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                           >
                             {message.content}
                           </Typography>
@@ -412,7 +460,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                           variant="caption"
                           sx={{
                             display: 'block',
-                            mt: 0.5,
+                            mt: 0.3,
                             textAlign: message.sender === 'user' ? 'right' : 'left',
                             color: 'text.secondary',
                           }}
@@ -420,85 +468,39 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </Typography>
                       }
-                      sx={{
-                        mx: 0,
-                        '& .MuiListItemText-primary': { mb: 0.5 },
-                      }}
+                      sx={{ mx: 0 }}
                     />
                   </ListItem>
                 ))}
                 <div ref={messagesEndRef} />
-                </List>
-              )}
-            </Box>
+              </List>
+            )}
+          </Box>
 
-            {/* 测试按钮区域 */}
-            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<BugReportIcon />}
-                onClick={async () => {
-                  console.log('🧪 [Test] Manually adding test message...');
-                  // 直接添加消息到对话框（不通过事件系统）
-                  const testMessage: ChatMessage = {
-                    id: `test-${Date.now()}`,
-                    content: '🧪 本地测试消息：如果看到这个消息，说明ChatBox渲染正常',
-                    sender: 'workflow',
-                    timestamp: new Date(),
-                    workflowType: 'info',
-                  };
-                  setMessages(prev => [...prev, testMessage]);
-                  
-                  // 尝试通过emit发送事件（用于测试Tauri事件系统）
-                  try {
-                    const { emit } = await import('@tauri-apps/api/event');
-                    await emit('workflow-message', {
-                      type: 'progress',
-                      content: '🧪 通过emit发送的测试消息',
-                      progress: 0.5,
-                    });
-                    console.log('✅ [Test] Event emitted successfully');
-                  } catch (e) {
-                    console.error('❌ [Test] Failed to emit event:', e);
-                  }
-                }}
-              >
-                测试消息
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={async () => {
-                  try {
-                    const result = await invoke<string>('test_workflow_event');
-                    console.log('🧪 [Test] Backend test result:', result);
-                  } catch (e) {
-                    console.error('❌ [Test] Backend test failed:', e);
-                  }
-                }}
-              >
-                测试后端事件
-              </Button>
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 1 }}>
+          {/* 输入框 */}
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
               fullWidth
               size="small"
-              placeholder={isAiThinking ? "AI正在思考..." : "输入消息..."}
+              placeholder={
+                isAiThinking
+                  ? (activeSession ? `${activeSession.modelName} 推理中...` : '正在思考...')
+                  : hasApiConfig === false
+                  ? '请先配置 AI API...'
+                  : activeSession
+                  ? `向 ${activeSession.modelName} 发送消息...`
+                  : '输入消息（Enter 发送）'
+              }
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={handleKeyPress}
               multiline
-              maxRows={2}
+              maxRows={3}
               disabled={isAiThinking}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   fontSize: '0.875rem',
-                  fieldset: {
-                    borderColor: alpha(theme.palette.divider, 0.5),
-                  },
+                  fieldset: { borderColor: alpha(theme.palette.divider, 0.5) },
                 },
               }}
             />
@@ -513,12 +515,13 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
                 color: (inputText.trim() && !isAiThinking)
                   ? theme.palette.primary.main
                   : theme.palette.text.disabled,
+                alignSelf: 'flex-end',
+                mb: 0.5,
               }}
             >
-              {isAiThinking ? <CircularProgress size={20} /> : <SendIcon sx={{ fontSize: 20 }} />}
+              {isAiThinking ? <CircularProgress size={18} /> : <SendIcon sx={{ fontSize: 18 }} />}
             </IconButton>
-            </Box>
-          </>
+          </Box>
         </CardContent>
       </Card>
     </Box>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Card,
@@ -6,420 +6,296 @@ import {
   Grid,
   Typography,
   LinearProgress,
-  useTheme,
   alpha,
+  Tooltip,
   IconButton,
+  Chip,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import HubIcon from '@mui/icons-material/Hub';
+import StarIcon from '@mui/icons-material/Star';
+import ComputerIcon from '@mui/icons-material/Computer';
+import PeopleIcon from '@mui/icons-material/People';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { TrainingStatus, DeviceInfo } from '../types';
-
-// 可折叠卡片组件
-interface CollapsibleCardProps {
-  title: string;
-  children: React.ReactNode;
-  defaultCollapsed?: boolean;
-}
-
-const CollapsibleCard: React.FC<CollapsibleCardProps> = ({ title, children, defaultCollapsed = false }) => {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
-
-  return (
-    <Card
-      onClick={() => collapsed && setCollapsed(false)}
-      sx={{
-        background: alpha('#000000', 0.6),
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        cursor: collapsed ? 'pointer' : 'default',
-      }}
-    >
-      <CardContent sx={{ p: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: collapsed ? 0 : 1,
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ fontSize: '0.875rem' }}>
-            {title}
-          </Typography>
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCollapsed(!collapsed);
-            }}
-            sx={{
-              color: 'text.secondary',
-              '&:hover': {
-                color: 'text.primary',
-              },
-            }}
-          >
-            {collapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-          </IconButton>
-        </Box>
-        {!collapsed && children}
-      </CardContent>
-    </Card>
-  );
-};
 
 export const TrainingDashboard: React.FC = () => {
-  const theme = useTheme();
-  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [nodeInfo, setNodeInfo] = useState<any>(null);
   const [connectedPeers, setConnectedPeers] = useState<any[]>([]);
+  const [deviceInfo, setDeviceInfo] = useState<any>(null);
+  const [contributionPoints, setContributionPoints] = useState(0);
+  const [sessionStartTime] = useState(Date.now());
+  const [copied, setCopied] = useState(false);
+  const contributionRef = useRef(0);
+
+  // 每分钟节点在线+1分，每次tick+0.1分（模拟贡献积分）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setContributionPoints(prev => {
+        const newVal = prev + 1;
+        contributionRef.current = newVal;
+        return newVal;
+      });
+    }, 60000); // 每分钟+1分
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-    const loadTrainingStatus = async () => {
-      try {
-        const status = await invoke<TrainingStatus>('get_training_stats');
-        setTrainingStatus(status);
-      } catch (error) {
-        console.error('Error loading training status:', error);
-      }
-    };
-
     const loadNodeInfo = async () => {
       try {
         const info = await invoke<any>('get_node_info');
         setNodeInfo(info);
-      } catch (error) {
-        console.error('Error loading node info:', error);
+        // 节点在线时，每次获取到tick_counter变化就加分
+        if (info?.is_running && info?.tick_counter > 0) {
+          setContributionPoints(prev => Math.max(prev, Math.floor(info.tick_counter * 0.1)));
+        }
+      } catch {
         setNodeInfo(null);
       }
     };
 
-    const loadConnectedPeers = async () => {
+    const loadPeers = async () => {
       try {
-        const peers = await invoke<any>('get_connected_peers');
-        setConnectedPeers(peers);
-      } catch (error) {
-        console.error('Error loading connected peers:', error);
+        const peers = await invoke<any[]>('get_connected_peers');
+        setConnectedPeers(peers || []);
+      } catch {
         setConnectedPeers([]);
       }
     };
 
     const loadDeviceInfo = async () => {
       try {
-        const info = await invoke<DeviceInfo>('get_device_info');
+        const info = await invoke<any>('get_device_info');
         setDeviceInfo(info);
-      } catch (error) {
-        console.error('Error loading device info:', error);
+      } catch {
         setDeviceInfo(null);
       }
     };
 
-    // Load initial data
-    loadTrainingStatus();
     loadNodeInfo();
-    loadConnectedPeers();
+    loadPeers();
     loadDeviceInfo();
 
-    const statusInterval = setInterval(() => {
-      loadTrainingStatus();
-    }, 5000);
-
-    const nodeInterval = setInterval(() => {
-      loadNodeInfo();
-    }, 10000);
-
-    const peersInterval = setInterval(() => {
-      loadConnectedPeers();
-    }, 60000);
-
-    const deviceInterval = setInterval(() => {
-      loadDeviceInfo();
-    }, 60000);
+    const nodeInterval = setInterval(loadNodeInfo, 10000);
+    const peersInterval = setInterval(loadPeers, 30000);
+    const deviceInterval = setInterval(loadDeviceInfo, 60000);
 
     let unlistenFn: any = null;
-    
-    const setupEventListener = async () => {
-      try {
-        unlistenFn = await listen('device_info_refresh', () => {
-          loadDeviceInfo();
-        });
-      } catch (error) {
-        console.warn('Event listener setup failed, using polling only:', error);
-      }
-    };
-
-    setupEventListener();
+    listen('device_info_refresh', () => loadDeviceInfo()).then(fn => { unlistenFn = fn; });
 
     return () => {
-      clearInterval(statusInterval);
       clearInterval(nodeInterval);
       clearInterval(peersInterval);
       clearInterval(deviceInterval);
-      if (unlistenFn) {
-        unlistenFn();
-      }
+      if (unlistenFn) unlistenFn();
     };
   }, []);
 
+  const handleCopyNodeId = () => {
+    if (nodeInfo?.id) {
+      navigator.clipboard.writeText(nodeInfo.id);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const onlineMinutes = Math.floor((Date.now() - sessionStartTime) / 60000);
+
   return (
-    <Grid container spacing={2}>
-      {/* 训练状态卡片 */}
-      <Grid size={{ xs: 12, md: 6 }}>
-        <CollapsibleCard title="训练状态">
-          {trainingStatus ? (
-            <Box>
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    训练进度
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {trainingStatus.current_epoch} / {trainingStatus.total_epochs}
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={(trainingStatus.current_epoch / trainingStatus.total_epochs) * 100}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    background: alpha(theme.palette.primary.main, 0.1),
-                  }}
-                />
-              </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* 节点状态卡片 — 最重要，放最上面 */}
+      <Card sx={{
+        background: alpha(nodeInfo?.is_running ? '#4caf50' : '#666', 0.08),
+        border: `1px solid ${alpha(nodeInfo?.is_running ? '#4caf50' : '#666', 0.25)}`,
+        borderRadius: 1,
+      }}>
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <HubIcon sx={{ color: nodeInfo?.is_running ? 'success.main' : 'text.disabled', fontSize: 20 }} />
+              <Typography variant="subtitle2">P2P 节点</Typography>
+            </Box>
+            <Chip
+              label={nodeInfo?.is_running ? '运行中' : '启动中...'}
+              size="small"
+              sx={{
+                background: alpha(nodeInfo?.is_running ? '#4caf50' : '#ff9800', 0.15),
+                color: nodeInfo?.is_running ? 'success.main' : 'warning.main',
+                border: `1px solid ${alpha(nodeInfo?.is_running ? '#4caf50' : '#ff9800', 0.3)}`,
+                fontSize: '0.7rem',
+                height: 22,
+              }}
+            />
+          </Box>
 
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 6 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    准确率
-                  </Typography>
-                  <Typography variant="h4" color="primary">
-                    {(trainingStatus.accuracy * 100).toFixed(1)}%
-                  </Typography>
-                </Grid>
-                <Grid size={{ xs: 6 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    损失
-                  </Typography>
-                  <Typography variant="h4" color="secondary">
-                    {trainingStatus.loss.toFixed(4)}
-                  </Typography>
-                </Grid>
-
-                <Grid size={{ xs: 6 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    处理样本数
-                  </Typography>
-                  <Typography variant="h5">
-                    {trainingStatus.samples_processed.toLocaleString()}
-                  </Typography>
-                </Grid>
-              </Grid>
+          {nodeInfo?.id ? (
+            <Box sx={{
+              display: 'flex', alignItems: 'center', gap: 0.5,
+              p: 1, borderRadius: 1,
+              background: alpha('#ffffff', 0.04),
+              border: `1px solid ${alpha('#ffffff', 0.06)}`,
+            }}>
+              <Typography variant="caption" sx={{
+                fontFamily: 'monospace', fontSize: '0.7rem',
+                color: 'text.secondary', flex: 1, overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {nodeInfo.id.slice(0, 20)}...
+              </Typography>
+              <Tooltip title={copied ? '已复制！' : '复制节点 ID'} placement="top">
+                <IconButton size="small" onClick={handleCopyNodeId} sx={{ p: 0.3 }}>
+                  <ContentCopyIcon sx={{ fontSize: 13, color: copied ? 'success.main' : 'text.secondary' }} />
+                </IconButton>
+              </Tooltip>
             </Box>
           ) : (
-            <Typography color="text.secondary">加载中...</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <LinearProgress sx={{ flex: 1, height: 3, borderRadius: 2 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                正在连接...
+              </Typography>
+            </Box>
           )}
-        </CollapsibleCard>
-      </Grid>
 
-      {/* 设备信息卡片 */}
-      <Grid size={{ xs: 12, md: 6 }}>
-        <CollapsibleCard title="设备信息">
+          {/* 网络信息行 */}
+          <Box sx={{ display: 'flex', gap: 2, mt: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <PeopleIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+              <Typography variant="caption" color="text.secondary">
+                {connectedPeers.length} 个节点
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                在线 {onlineMinutes > 0 ? `${onlineMinutes} 分钟` : '不到 1 分钟'}
+              </Typography>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* 贡献积分卡片 */}
+      <Card sx={{
+        background: alpha('#ffd700', 0.06),
+        border: `1px solid ${alpha('#ffd700', 0.2)}`,
+        borderRadius: 1,
+      }}>
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <StarIcon sx={{ color: '#ffd700', fontSize: 20 }} />
+            <Typography variant="subtitle2">贡献积分</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography variant="h3" sx={{ color: '#ffd700', fontWeight: 700, lineHeight: 1 }}>
+              {contributionPoints}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">分</Typography>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            节点在线时间 · 网络贡献 · 任务处理
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={Math.min((contributionPoints % 100), 100)}
+            sx={{
+              mt: 1, height: 4, borderRadius: 2,
+              background: alpha('#ffd700', 0.1),
+              '& .MuiLinearProgress-bar': { background: '#ffd700' },
+            }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+            下一级别还需 {100 - (contributionPoints % 100)} 分
+          </Typography>
+        </CardContent>
+      </Card>
+
+      {/* 设备资源卡片 */}
+      <Card sx={{
+        background: alpha('#ffffff', 0.03),
+        border: `1px solid ${alpha('#ffffff', 0.08)}`,
+        borderRadius: 1,
+      }}>
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <ComputerIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+            <Typography variant="subtitle2">设备资源</Typography>
+          </Box>
           {deviceInfo ? (
             <Grid container spacing={1.5}>
               <Grid size={{ xs: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  GPU类型
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {deviceInfo.gpu_type || '未检测到'}
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  GPU使用率
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {deviceInfo.gpu_usage != null ? `${deviceInfo.gpu_usage.toFixed(1)}%` : 'N/A'}
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  GPU内存
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {deviceInfo.gpu_memory_used != null && deviceInfo.gpu_memory_total != null ?
-                    `${deviceInfo.gpu_memory_used.toFixed(1)}/${deviceInfo.gpu_memory_total.toFixed(1)} GB` : 'N/A'}
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  CPU核心
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {deviceInfo.cpu_cores}核
-                </Typography>
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  总内存
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {deviceInfo.total_memory_gb.toFixed(1)}GB
-                </Typography>
-              </Grid>
-              {deviceInfo.battery_level != null && (
-                <Grid size={{ xs: 6 }}>
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    电池
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {deviceInfo.battery_level.toFixed(0)}%
-                  </Typography>
-                </Grid>
-              )}
-            </Grid>
-          ) : (
-            <Typography color="text.secondary" variant="body2">加载中...</Typography>
-          )}
-        </CollapsibleCard>
-      </Grid>
-
-      {/* 节点信息卡片 */}
-      <Grid size={{ xs: 12 }}>
-        <CollapsibleCard title="节点信息">
-          {nodeInfo ? (
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 1,
-                    background: alpha(nodeInfo.is_running ? theme.palette.success.main : theme.palette.grey[700], 0.1),
-                    textAlign: 'center',
-                  }}
-                >
-                  <Typography variant="h6" color={nodeInfo.is_running ? 'success.main' : 'text.secondary'} sx={{ fontSize: '1.2rem' }}>
-                    {nodeInfo.is_running ? '运行中' : '已停止'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    节点状态
-                  </Typography>
-                  {nodeInfo.id && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontFamily: 'monospace' }}>
-                      ID: {nodeInfo.id.slice(0, 16)}...
+                <Typography variant="caption" color="text.secondary" display="block">CPU</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  {deviceInfo.cpu_cores} 核
+                  {deviceInfo.cpu_usage != null && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      {deviceInfo.cpu_usage.toFixed(0)}%
                     </Typography>
                   )}
-                </Box>
+                </Typography>
               </Grid>
-
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 1,
-                    background: alpha(theme.palette.info.main, 0.1),
-                    textAlign: 'center',
-                  }}
-                >
-                  <Typography variant="h6" color="info.main" sx={{ fontSize: '1.2rem' }}>
-                    {nodeInfo.tick_counter || 0}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    训练周期
-                  </Typography>
-                </Box>
+              <Grid size={{ xs: 6 }}>
+                <Typography variant="caption" color="text.secondary" display="block">内存</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  {deviceInfo.total_memory_gb?.toFixed(1)} GB
+                </Typography>
               </Grid>
-
-              {nodeInfo.device_capabilities && (
-                <>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      内存
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="caption" color="text.secondary" display="block">GPU</Typography>
+                <Typography variant="body2" fontWeight={500}>
+                  {deviceInfo.gpu_type || '无独显'}
+                  {deviceInfo.gpu_usage != null && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      {deviceInfo.gpu_usage.toFixed(0)}%
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {nodeInfo.device_capabilities.max_memory_mb}MB
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      CPU核心
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {nodeInfo.device_capabilities.cpu_cores}核
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      GPU
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {nodeInfo.device_capabilities.has_gpu ? '有' : '无'}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      网络类型
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {nodeInfo.device_capabilities.network_type || '未知'}
-                    </Typography>
-                  </Grid>
-                </>
-              )}
+                  )}
+                </Typography>
+              </Grid>
             </Grid>
           ) : (
-            <Typography color="text.secondary" variant="body2">节点未启动</Typography>
+            <Typography variant="caption" color="text.secondary">加载中...</Typography>
           )}
-        </CollapsibleCard>
-      </Grid>
+        </CardContent>
+      </Card>
 
-      {/* 连接节点卡片 */}
-      <Grid size={{ xs: 12 }}>
-        <CollapsibleCard title="连接节点" defaultCollapsed={true}>
-          {connectedPeers.length > 0 ? (
-            <Grid container spacing={1}>
-              {connectedPeers.map((peer, index) => (
-                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={peer.id || index}>
-                  <Box
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 1,
-                      background: alpha(
-                        peer.type === 'primary' ? theme.palette.success.main : theme.palette.warning.main,
-                        0.1
-                      ),
-                      border: `1px solid ${
-                        peer.type === 'primary' 
-                          ? alpha(theme.palette.success.main, 0.3)
-                          : alpha(theme.palette.warning.main, 0.3)
-                      }`,
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: 'monospace' }}>
-                      {peer.id ? `${peer.id.slice(0, 12)}...` : 'Unknown'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      类型: {peer.type === 'primary' ? '主节点' : '备份节点'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      相似度: {peer.similarity?.toFixed(3) || 'N/A'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      地理亲和: {peer.geo_affinity?.toFixed(3) || 'N/A'}
-                    </Typography>
-                  </Box>
-                </Grid>
+      {/* 连接的 Peer 节点（折叠展示） */}
+      {connectedPeers.length > 0 && (
+        <Card sx={{
+          background: alpha('#ffffff', 0.02),
+          border: `1px solid ${alpha('#ffffff', 0.06)}`,
+          borderRadius: 1,
+        }}>
+          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              已连接的节点（{connectedPeers.length}）
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {connectedPeers.slice(0, 3).map((peer, i) => (
+                <Box key={i} sx={{
+                  display: 'flex', alignItems: 'center', gap: 1,
+                  p: 0.75, borderRadius: 0.5,
+                  background: alpha('#ffffff', 0.03),
+                }}>
+                  <Box sx={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: peer.type === 'primary' ? '#4caf50' : '#ff9800',
+                  }} />
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary', flex: 1 }}>
+                    {peer.id?.slice(0, 16)}...
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
+                    {peer.type === 'primary' ? '主' : '备'}
+                  </Typography>
+                </Box>
               ))}
-            </Grid>
-          ) : (
-            <Typography color="text.secondary" variant="body2">暂无连接节点</Typography>
-          )}
-        </CollapsibleCard>
-      </Grid>
-    </Grid>
+              {connectedPeers.length > 3 && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', textAlign: 'center' }}>
+                  +{connectedPeers.length - 3} 个节点
+                </Typography>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
   );
 };

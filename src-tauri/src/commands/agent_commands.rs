@@ -375,6 +375,47 @@ pub async fn run_ai_agent_setup(
 ) -> Result<serde_json::Value, String> {
     use reqwest;
 
+    // ====== 优化：优先检查本地 Ollama 是否已有可用模型 ======
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "info",
+        "content": "🔍 检查本地 Ollama 状态...",
+    }));
+
+    // 快速检测本地 Ollama（复用 quick_start_local_inference 逻辑）
+    let local_check = quick_start_local_inference().await;
+    if let Ok(check_result) = local_check {
+        if check_result.get("found").and_then(|v| v.as_bool()).unwrap_or(false)
+            && check_result.get("has_models").and_then(|v| v.as_bool()).unwrap_or(false) {
+            // 本地已有运行中的 Ollama 和模型，直接使用
+            let models = check_result.get("all_models")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().ok()).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let best_model = check_result.get("model_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("qwen2.5:1.5b");
+            let endpoint = check_result.get("inference_endpoint")
+                .and_then(|v| v.as_str())
+                .unwrap_or("http://localhost:11434/v1");
+
+            let _ = app.emit("workflow-message", serde_json::json!({
+                "type": "success",
+                "content": format!("✅ 发现本地已有可用的 Ollama 推理服务！\n\n已安装模型: {}\n自动选择: {}\n端点: {}\n\n直接使用现有模型，无需重新配置 👇", models.join(", "), best_model, endpoint),
+            }));
+
+            return Ok(serde_json::json!({
+                "success": true,
+                "inference_endpoint": endpoint,
+                "model_name": best_model,
+                "summary": format!("使用本地已有模型: {}（共 {} 个模型）", best_model, models.len()),
+                "using_local_model": true,
+                "local_existing": true,
+            }));
+        }
+    }
+
+    // ====== 本地没有可用模型，继续 AI 代理流程 ======
+    
     // 获取外部 API 配置
     let api_config = {
         let apis = state.external_apis.lock();
@@ -386,7 +427,7 @@ pub async fn run_ai_agent_setup(
 
     let _ = app.emit("workflow-message", serde_json::json!({
         "type": "info",
-        "content": format!("🤖 AI 代理启动\n\n用户请求运行: {}\nAI 将自动探索当前机器并配置最合适的本地推理环境。\n\n正在收集系统信息...", user_model_hint),
+        "content": format!("🤖 AI 代理启动\n\n本地未检测到可用模型，将自动配置...\n\n用户请求运行: {}", user_model_hint),
     }));
 
     let client = reqwest::Client::builder()
@@ -418,7 +459,8 @@ pub async fn run_ai_agent_setup(
         - 如果 check_system 结果中有 ollama_bin_path 字段，说明 Ollama 已安装但不在 PATH 中；\n\
           此时所有 ollama 命令请使用该完整路径，例如 '<ollama_bin_path> pull qwen2.5:1.5b'\n\
           或者使用 'PATH=<ollama_dir>:$PATH ollama pull ...' 的方式\n\
-        - 如果 ollama_models 字段已有模型，可直接使用已有模型无需重新拉取\n\
+        - 如果 ollama_models 字段已有模型，必须立即使用现有模型，直接调用 finish_setup！
+          不要重新拉取任何模型！不要执行任何安装命令！\n\
         - 如果机器确实不适合运行任何模型，调用 report_failure\n\
         - 每次只调用一个工具，等待结果后再决定下一步\n\
         - 用中文解释你的每个决定",
@@ -450,7 +492,7 @@ pub async fn run_ai_agent_setup(
         }),
         serde_json::json!({
             "role": "user",
-            "content": format!("请开始配置本地推理环境。用户想运行 {}。", user_model_hint)
+            "content": format!("请开始配置本地推理环境。\n\n【关键】如果系统已有ollama模型，直接使用现有模型并调用 finish_setup，不要重新安装或下载任何模型！\n\n用户期望: {}", user_model_hint)
         })
     ];
 
@@ -608,6 +650,7 @@ pub async fn run_ai_agent_setup(
                         "inference_endpoint": endpoint,
                         "model_name": model,
                         "summary": summary,
+                        "using_local_model": false,
                     }));
 
                     serde_json::json!({"status": "setup_complete"})

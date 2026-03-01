@@ -16,7 +16,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({ splitPercentage }) => {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        minWidth: '30%', // 左侧最小30%，不能被最小化
+        minWidth: 400, // 左侧最小30%，不能被最小化
         maxWidth: '95%', // 左侧最大95%，允许右侧隐藏
       }}
     >

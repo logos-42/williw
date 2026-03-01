@@ -122,15 +122,54 @@ async fn test_model_loader(config: &TestConfig) -> Result<()> {
 
 /// 测试 3: 测试模型切分
 async fn test_model_split(config: &TestConfig) -> Result<()> {
+    // 辅助函数：查找可用的 Python 解释器
+    async fn find_python() -> String {
+        // 先尝试常见的 Python 命令
+        let commands = vec!["python3", "python", "py"];
+        
+        for cmd in &commands {
+            let output = tokio::process::Command::new(cmd)
+                .arg("--version")
+                .output()
+                .await;
+            
+            if let Ok(out) = output {
+                if out.status.success() {
+                    info!("✅ 找到 Python: {}", String::from_utf8_lossy(&out.stdout).trim());
+                    return cmd.to_string();
+                }
+            }
+        }
+        
+        // Windows 上尝试使用 py 命令
+        #[cfg(target_os = "windows")]
+        {
+            let output = tokio::process::Command::new("py")
+                .arg("--version")
+                .output()
+                .await;
+            
+            if let Ok(out) = output {
+                if out.status.success() {
+                    info!("✅ 找到 Python (py): {}", String::from_utf8_lossy(&out.stdout).trim());
+                    return "py".to_string();
+                }
+            }
+        }
+        
+        "python".to_string()
+    }
+
     info!("📋 测试 3: 测试模型切分");
 
     // 创建切分器
     let splitter = ModelSplitter::new();
     info!("✅ 模型切分器创建成功");
 
-    // 检查Python环境
+    // 检查Python环境 - 使用动态检测
     info!("🔍 检查Python环境...");
-    let python_check = tokio::process::Command::new("C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe")
+    let python_cmd = find_python().await;
+    let python_check = tokio::process::Command::new(&python_cmd)
         .arg("--version")
         .output()
         .await;
@@ -147,7 +186,7 @@ async fn test_model_split(config: &TestConfig) -> Result<()> {
     }
 
     // 检查torch是否安装
-    let torch_check = tokio::process::Command::new("C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe")
+    let torch_check = tokio::process::Command::new(&python_cmd)
         .arg("-c")
         .arg("import torch; print(f'PyTorch {torch.__version__}')")
         .output()

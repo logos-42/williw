@@ -40,6 +40,55 @@ impl Default for ModelSplitter {
     }
 }
 
+/// 动态查找 Python 可执行文件
+fn find_python() -> Result<String> {
+    // 优先检查环境变量 PYTHON_PATH
+    if let Ok(py_path) = std::env::var("PYTHON_PATH") {
+        if !py_path.is_empty() {
+            return Ok(py_path);
+        }
+    }
+
+    // 常见的 Python 路径
+    let candidates = if cfg!(target_os = "windows") {
+        vec![
+            "python.exe",
+            "python3.exe",
+            "C:\\Python312\\python.exe",
+            "C:\\Python311\\python.exe",
+            "C:\\Python310\\python.exe",
+            "C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+            "C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        ]
+    } else {
+        vec![
+            "python3",
+            "python",
+            "/usr/bin/python3",
+            "/usr/local/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/usr/bin/python",
+        ]
+    };
+
+    for cmd in candidates {
+        if let Ok(output) = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("command -v {}", cmd))
+            .output()
+        {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return Ok(path);
+                }
+            }
+        }
+    }
+
+    anyhow::bail!("未找到 Python 可执行文件，请安装 Python 3.8+")
+}
+
 impl ModelSplitter {
     pub fn new() -> Self {
         Self
@@ -77,9 +126,10 @@ impl ModelSplitter {
             .unwrap_or_else(|| PathBuf::from("./model_shards").join(node_id));
         tokio::fs::create_dir_all(&output_dir).await?;
         
-        // 构建 Python 命令 - 优先使用 Python 3.12
-        let python_cmd = std::env::var("PYTHON_PATH")
-            .unwrap_or_else(|_| "C:\\Users\\Mechrevo\\AppData\\Local\\Programs\\Python\\Python312\\python.exe".to_string());
+        // 动态查找 Python 可执行文件
+        let python_cmd = find_python()?;
+        
+        println!("  使用 Python: {}", python_cmd);
 
         let output = tokio::process::Command::new(&python_cmd)
             .arg(&script_path)

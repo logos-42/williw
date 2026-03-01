@@ -31,6 +31,9 @@ use commands::node_commands::{
 use commands::model_device_commands::{
     get_device_info,
 };
+use commands::model_commands::{
+    download_model_with_progress,
+};
 use commands::api_key_commands::{
     get_api_keys,
     create_api_key,
@@ -209,6 +212,7 @@ async fn main() {
             get_node_info,
             get_connected_peers,
             get_device_info,
+            download_model_with_progress,
             get_api_keys,
             create_api_key,
             delete_api_key,

@@ -6,6 +6,38 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use tracing::{info, warn, error};
 
+/// 查找可用的 Python 解释器
+fn find_python() -> String {
+    // 先尝试常见的 Python 命令
+    let commands = vec!["python3", "python", "py"];
+    
+    for cmd in commands {
+        if std::process::Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false) 
+        {
+            return cmd.to_string();
+        }
+    }
+    
+    // Windows 上尝试使用 py 命令
+    #[cfg(target_os = "windows")]
+    {
+        if std::process::Command::new("py")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false) 
+        {
+            return "py".to_string();
+        }
+    }
+    
+    "python".to_string()
+}
+
 /// Hugging Face 模型配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HFModelConfig {
@@ -66,7 +98,8 @@ impl LlamaModelLoader {
         info!("开始下载 Llama 3.2 1B 模型...");
         
         // 使用 huggingface-hub 下载模型
-        let output = Command::new("python")
+        let python_cmd = find_python();
+        let output = Command::new(&python_cmd)
             .arg("-c")
             .arg(&format!(
                 r#"
@@ -133,7 +166,8 @@ except Exception as e:
 
     /// 从 safetensors 文件加载参数
     async fn load_safetensors(&self, file_path: &Path) -> Result<Vec<ModelLayer>> {
-        let output = Command::new("python")
+        let python_cmd = find_python();
+        let output = Command::new(&python_cmd)
             .arg("-c")
             .arg(&format!(
                 r#"
@@ -192,7 +226,8 @@ except Exception as e:
 
     /// 从 PyTorch 模型文件加载参数
     async fn load_pytorch_model(&self, file_path: &Path) -> Result<Vec<ModelLayer>> {
-        let output = Command::new("python")
+        let python_cmd = find_python();
+        let output = Command::new(&python_cmd)
             .arg("-c")
             .arg(&format!(
                 r#"

@@ -65,7 +65,7 @@ use commands::workflow_commands::{
     get_workflow_status,
     check_setup_status,
 };
-use commands::agent_commands::{
+use commands::{
     run_ai_agent_setup,
     chat_with_local_endpoint,
     quick_start_local_inference,

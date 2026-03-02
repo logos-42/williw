@@ -252,7 +252,7 @@ impl ModelDownloader {
     }
 
     /// 简化版下载（无进度回调，兼容旧接口）
-    pub async fn download_model(&self, config: DownloadConfig) -> Result<DownloadResult> {
+    pub async fn download_model_simple(&self, config: DownloadConfig) -> Result<DownloadResult> {
         self.download_model(config, |_| {}).await
     }
 }
@@ -270,7 +270,7 @@ mod tests {
             hf_token: None,
         };
 
-        let result = downloader.download_model(config).await;
+        let result = downloader.download_model_simple(config).await;
         assert!(result.is_ok());
     }
 }

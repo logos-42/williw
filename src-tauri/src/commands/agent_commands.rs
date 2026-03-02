@@ -10,6 +10,9 @@ use crate::state::AppState;
 use tauri::{State, Emitter};
 use serde_json;
 use std::process::Command;
+use std::fs;
+use tokio::fs as async_fs;
+use std::path::Path;
 
 // ====== 工具定义（给 LLM 的 JSON schema）======
 
@@ -114,6 +117,244 @@ fn get_tool_definitions() -> serde_json::Value {
                         }
                     },
                     "required": ["reason", "suggestion"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "download_model",
+                "description": "Download AI models from Ollama or HuggingFace. Supports both sources.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "enum": ["ollama", "huggingface"],
+                            "description": "Model source"
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Model name (e.g., qwen2.5:0.5b or meta-llama/Llama-3.2-1B)"
+                        },
+                        "cache_dir": {
+                            "type": "string",
+                            "description": "Optional cache directory"
+                        },
+                        "timeout_seconds": {
+                            "type": "integer",
+                            "default": 300
+                        }
+                    },
+                    "required": ["source", "model"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "start_inference_server",
+                "description": "Start a local inference server. Supports Ollama, llama.cpp server.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "server_type": {
+                            "type": "string",
+                            "enum": ["ollama", "llama.cpp"]
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Model name or path"
+                        },
+                        "port": {
+                            "type": "integer",
+                            "default": 11434
+                        },
+                        "gpu_layers": {
+                            "type": "integer",
+                            "description": "GPU layers for llama.cpp (-1 for all)"
+                        },
+                        "background": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    },
+                    "required": ["server_type", "model"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "wait_for_condition",
+                "description": "Poll HTTP endpoint, command, or file until expected pattern matches.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {
+                            "type": "string",
+                            "description": "URL, command, or file path"
+                        },
+                        "target_type": {
+                            "type": "string",
+                            "enum": ["http", "command", "file"]
+                        },
+                        "expected": {
+                            "type": "string",
+                            "description": "Expected pattern (string or regex)"
+                        },
+                        "max_attempts": {
+                            "type": "integer",
+                            "default": 30
+                        },
+                        "interval_seconds": {
+                            "type": "integer",
+                            "default": 2
+                        },
+                        "timeout_seconds": {
+                            "type": "integer",
+                            "default": 60
+                        }
+                    },
+                    "required": ["target", "target_type", "expected"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "kill_process",
+                "description": "Terminate a running process by name.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_name": {
+                            "type": "string",
+                            "description": "Process name to kill"
+                        },
+                        "force": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    "required": ["process_name"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "description": "Write content to a file. Creates parent directories if needed.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Content to write"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read content from a file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "File path to read"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "file_exists",
+                "description": "Check if a file or directory exists.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Path to check"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_directory",
+                "description": "List files and directories in a path.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Directory path"
+                        },
+                        "include_hidden": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_command_with_retry",
+                "description": "Execute a shell command with automatic retry on failure.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Command to execute"
+                        },
+                        "max_retries": {
+                            "type": "integer",
+                            "default": 3
+                        },
+                        "retry_interval_seconds": {
+                            "type": "integer",
+                            "default": 5
+                        },
+                        "timeout_seconds": {
+                            "type": "integer",
+                            "default": 30
+                        }
+                    },
+                    "required": ["command"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_ollama_models",
+                "description": "Get list of installed Ollama models and their status.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
                 }
             }
         }
@@ -358,6 +599,646 @@ async fn tool_check_http_endpoint(url: &str) -> serde_json::Value {
     }
 }
 
+async fn tool_download_model(
+    source: &str,
+    model: &str,
+    cache_dir: Option<&str>,
+    timeout_secs: u64,
+    app: &tauri::AppHandle,
+) -> serde_json::Value {
+    log::info!("[Agent] 下载模型: source={}, model={}", source, model);
+    
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "progress",
+        "content": format!("📥 开始下载模型: {} (来源: {})", model, source),
+    }));
+
+    match source {
+        "ollama" => {
+            let ollama_bin = find_ollama_bin().unwrap_or_else(|| "ollama".to_string());
+            let command = format!("{} pull {}", ollama_bin, model);
+            
+            let _ = app.emit("workflow-message", serde_json::json!({
+                "type": "progress",
+                "content": format!("🔧 执行命令: {}", command),
+            }));
+
+            let timeout = tokio::time::Duration::from_secs(timeout_secs);
+            let command_owned = command.clone();
+            
+            let result = tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(move || {
+                    Command::new("sh")
+                        .arg("-c")
+                        .arg(&command_owned)
+                        .output()
+                }).await
+            }).await;
+
+            match result {
+                Ok(Ok(Ok(output))) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    let success = output.status.success();
+                    
+                    if success {
+                        let _ = app.emit("workflow-message", serde_json::json!({
+                            "type": "success",
+                            "content": format!("✅ 模型下载成功: {}", model),
+                        }));
+                    }
+                    
+                    serde_json::json!({
+                        "success": success,
+                        "source": source,
+                        "model": model,
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "message": if success { format!("模型 {} 下载成功", model) } else { format!("下载失败: {}", stderr) }
+                    })
+                }
+                Ok(Ok(Err(e))) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("执行错误: {}", e)
+                }),
+                Ok(Err(e)) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("任务错误: {}", e)
+                }),
+                Err(_) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("下载超时（{}秒）", timeout_secs)
+                })
+            }
+        }
+        "huggingface" => {
+            let cache_arg = cache_dir.map(|d| format!("--cache-dir {}", d)).unwrap_or_default();
+            let command = format!("python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('{}' {})\"", model, cache_arg);
+            
+            let timeout = tokio::time::Duration::from_secs(timeout_secs);
+            let command_owned = command.clone();
+            
+            let result = tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(move || {
+                    Command::new("sh")
+                        .arg("-c")
+                        .arg(&command_owned)
+                        .output()
+                }).await
+            }).await;
+
+            match result {
+                Ok(Ok(Ok(output))) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    let success = output.status.success();
+                    
+                    let model_path = if success {
+                        cache_dir.unwrap_or("~/.cache/huggingface").to_string()
+                    } else {
+                        String::new()
+                    };
+                    
+                    serde_json::json!({
+                        "success": success,
+                        "source": source,
+                        "model": model,
+                        "model_path": model_path,
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "message": if success { format!("模型 {} 下载成功", model) } else { format!("下载失败: {}", stderr) }
+                    })
+                }
+                Ok(Ok(Err(e))) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("执行错误: {}", e)
+                }),
+                Ok(Err(e)) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("任务错误: {}", e)
+                }),
+                Err(_) => serde_json::json!({
+                    "success": false,
+                    "source": source,
+                    "model": model,
+                    "error": format!("下载超时（{}秒）", timeout_secs)
+                })
+            }
+        }
+        _ => serde_json::json!({
+            "success": false,
+            "error": format!("不支持的模型来源: {}", source)
+        })
+    }
+}
+
+async fn tool_start_inference_server(
+    server_type: &str,
+    model: &str,
+    port: u16,
+    gpu_layers: Option<i32>,
+    background: bool,
+    app: &tauri::AppHandle,
+) -> serde_json::Value {
+    log::info!("[Agent] 启动推理服务器: type={}, model={}, port={}", server_type, model, port);
+
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "progress",
+        "content": format!("🚀 启动推理服务器: {} (模型: {}, 端口: {})", server_type, model, port),
+    }));
+
+    match server_type {
+        "ollama" => {
+            let command = if background {
+                format!("ollama serve &")
+            } else {
+                "ollama serve".to_string()
+            };
+
+            let result = Command::new("sh")
+                .arg("-c")
+                .arg(&command)
+                .spawn();
+
+            match result {
+                Ok(child) => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    let endpoint = format!("http://localhost:{}/v1", port);
+                    serde_json::json!({
+                        "success": true,
+                        "server_type": server_type,
+                        "model": model,
+                        "endpoint": endpoint,
+                        "pid": child.id(),
+                        "message": format!("Ollama 服务已启动 (PID: {})", child.id())
+                    })
+                }
+                Err(e) => serde_json::json!({
+                    "success": false,
+                    "error": format!("启动失败: {}", e)
+                })
+            }
+        }
+        "llama.cpp" => {
+            let gpu_layers_arg = gpu_layers.map(|l| format!("--gpu-layers {}", l)).unwrap_or_default();
+            let command = if background {
+                format!("llama-server --model {} --port {} {} &", model, port, gpu_layers_arg)
+            } else {
+                format!("llama-server --model {} --port {} {}", model, port, gpu_layers_arg)
+            };
+
+            let result = Command::new("sh")
+                .arg("-c")
+                .arg(&command)
+                .spawn();
+
+            match result {
+                Ok(child) => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    let endpoint = format!("http://localhost:{}/v1", port);
+                    serde_json::json!({
+                        "success": true,
+                        "server_type": server_type,
+                        "model": model,
+                        "endpoint": endpoint,
+                        "pid": child.id(),
+                        "message": format!("llama.cpp 服务已启动 (PID: {})", child.id())
+                    })
+                }
+                Err(e) => serde_json::json!({
+                    "success": false,
+                    "error": format!("启动失败: {}", e)
+                })
+            }
+        }
+        _ => serde_json::json!({
+            "success": false,
+            "error": format!("不支持的服务器类型: {}", server_type)
+        })
+    }
+}
+
+async fn tool_wait_for_condition(
+    target: &str,
+    target_type: &str,
+    expected: &str,
+    max_attempts: u32,
+    interval_secs: u64,
+    _timeout_secs: u64,
+) -> serde_json::Value {
+    log::info!("[Agent] 等待条件: target={}, type={}, expected={}", target, target_type, expected);
+
+    let interval = tokio::time::Duration::from_secs(interval_secs);
+    let mut matched = false;
+    let mut attempts = 0;
+
+    for attempt in 0..max_attempts {
+        attempts = attempt + 1;
+        
+        let check_result = match target_type {
+            "http" => {
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(5))
+                    .build()
+                    .unwrap_or_default();
+                
+                match client.get(target).send().await {
+                    Ok(resp) => {
+                        let body = resp.text().await.unwrap_or_default();
+                        serde_json::json!({ "matched": body.contains(expected), "content": body })
+                    }
+                    Err(_) => serde_json::json!({ "matched": false })
+                }
+            }
+            "command" => {
+                let output = Command::new("sh")
+                    .arg("-c")
+                    .arg(target)
+                    .output()
+                    .ok();
+                
+                match output {
+                    Some(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+                        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                        let combined = format!("{}\n{}", stdout, stderr);
+                        serde_json::json!({ "matched": combined.contains(expected), "content": combined })
+                    }
+                    None => serde_json::json!({ "matched": false })
+                }
+            }
+            "file" => {
+                match fs::read_to_string(target) {
+                    Ok(content) => serde_json::json!({ "matched": content.contains(expected), "content": content }),
+                    Err(_) => serde_json::json!({ "matched": false })
+                }
+            }
+            _ => serde_json::json!({ "matched": false, "error": "未知目标类型" })
+        };
+
+        if check_result.get("matched").and_then(|v| v.as_bool()).unwrap_or(false) {
+            matched = true;
+            break;
+        }
+
+        if attempt < max_attempts - 1 {
+            tokio::time::sleep(interval).await;
+        }
+    }
+
+    serde_json::json!({
+        "success": matched,
+        "matched": matched,
+        "attempts": attempts,
+        "max_attempts": max_attempts,
+        "message": if matched { 
+            format!("条件在第 {} 次尝试后匹配", attempts) 
+        } else { 
+            format!("在 {} 次尝试后仍未匹配", max_attempts) 
+        }
+    })
+}
+
+async fn tool_kill_process(process_name: &str, force: bool) -> serde_json::Value {
+    log::info!("[Agent] 终止进程: name={}, force={}", process_name, force);
+
+    let signal = if force { "-9" } else { "" };
+    let command = if cfg!(target_os = "windows") {
+        if force {
+            format!("taskkill /F /IM {}", process_name)
+        } else {
+            format!("taskkill /IM {}", process_name)
+        }
+    } else {
+        if force {
+            format!("pkill -9 {}", process_name)
+        } else {
+            format!("pkill {}", process_name)
+        }
+    };
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .output();
+
+    match output {
+        Ok(o) => {
+            let success = o.status.success();
+            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+            
+            serde_json::json!({
+                "success": success,
+                "process_name": process_name,
+                "force": force,
+                "stdout": stdout,
+                "stderr": stderr,
+                "message": if success { 
+                    format!("进程 {} 已终止", process_name) 
+                } else { 
+                    format!("终止失败: {}", stderr) 
+                }
+            })
+        }
+        Err(e) => serde_json::json!({
+            "success": false,
+            "process_name": process_name,
+            "error": format!("执行错误: {}", e)
+        })
+    }
+}
+
+async fn tool_write_file(path: &str, content: &str) -> serde_json::Value {
+    log::info!("[Agent] 写文件: {}", path);
+
+    let path_obj = Path::new(path);
+    
+    if let Some(parent) = path_obj.parent() {
+        if !parent.exists() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                return serde_json::json!({
+                    "success": false,
+                    "path": path,
+                    "error": format!("创建父目录失败: {}", e)
+                });
+            }
+        }
+    }
+
+    match fs::write(path, content) {
+        Ok(_) => {
+            let bytes_written = content.len();
+            serde_json::json!({
+                "success": true,
+                "path": path,
+                "bytes_written": bytes_written,
+                "message": format!("成功写入 {} 字节", bytes_written)
+            })
+        }
+        Err(e) => serde_json::json!({
+            "success": false,
+            "path": path,
+            "error": format!("写入失败: {}", e)
+        })
+    }
+}
+
+async fn tool_read_file(path: &str) -> serde_json::Value {
+    log::info!("[Agent] 读文件: {}", path);
+
+    match fs::read_to_string(path) {
+        Ok(content) => {
+            let size = content.len();
+            serde_json::json!({
+                "success": true,
+                "path": path,
+                "content": content,
+                "size": size,
+                "message": format!("成功读取 {} 字节", size)
+            })
+        }
+        Err(e) => serde_json::json!({
+            "success": false,
+            "path": path,
+            "error": format!("读取失败: {}", e)
+        })
+    }
+}
+
+fn tool_file_exists(path: &str) -> serde_json::Value {
+    log::info!("[Agent] 检查文件是否存在: {}", path);
+
+    let path_obj = Path::new(path);
+    let exists = path_obj.exists();
+    let is_file = path_obj.is_file();
+    let is_dir = path_obj.is_dir();
+
+    serde_json::json!({
+        "success": true,
+        "path": path,
+        "exists": exists,
+        "is_file": is_file,
+        "is_dir": is_dir,
+        "message": if exists {
+            if is_file { "是文件" } else if is_dir { "是目录" } else { "存在" }
+        } else { "不存在" }
+    })
+}
+
+async fn tool_list_directory(path: &str, include_hidden: bool) -> serde_json::Value {
+    log::info!("[Agent] 列出目录: {}, include_hidden={}", path, include_hidden);
+
+    let mut entries: Vec<serde_json::Value> = vec![];
+
+    match fs::read_dir(path) {
+        Ok(dir) => {
+            for entry in dir.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                
+                if !include_hidden && name.starts_with('.') {
+                    continue;
+                }
+
+                let file_type = entry.file_type().ok();
+                let is_file = file_type.map(|ft| ft.is_file()).unwrap_or(false);
+                let is_dir = file_type.map(|ft| ft.is_dir()).unwrap_or(false);
+
+                entries.push(serde_json::json!({
+                    "name": name,
+                    "is_file": is_file,
+                    "is_dir": is_dir
+                }));
+            }
+            
+            entries.sort_by(|a, b| {
+                let a_is_dir = a.get("is_dir").and_then(|v| v.as_bool()).unwrap_or(false);
+                let b_is_dir = b.get("is_dir").and_then(|v| v.as_bool()).unwrap_or(false);
+                if a_is_dir != b_is_dir {
+                    b_is_dir.cmp(&a_is_dir)
+                } else {
+                    a.get("name").and_then(|v| v.as_str()).unwrap_or("").cmp(
+                        b.get("name").and_then(|v| v.as_str()).unwrap_or("")
+                    )
+                }
+            });
+
+            serde_json::json!({
+                "success": true,
+                "path": path,
+                "entries": entries,
+                "count": entries.len(),
+                "message": format!("列出 {} 个条目", entries.len())
+            })
+        }
+        Err(e) => serde_json::json!({
+            "success": false,
+            "path": path,
+            "error": format!("读取目录失败: {}", e)
+        })
+    }
+}
+
+async fn tool_run_command_with_retry(
+    command: &str,
+    max_retries: u32,
+    retry_interval_secs: u64,
+    timeout_secs: u64,
+    app: &tauri::AppHandle,
+) -> serde_json::Value {
+    log::info!("[Agent] 带重试执行命令: {}, max_retries={}", command, max_retries);
+
+    let _ = app.emit("workflow-message", serde_json::json!({
+        "type": "progress",
+        "content": format!("🔄 执行命令（最多重试 {} 次）: {}", max_retries, command),
+    }));
+
+    let interval = tokio::time::Duration::from_secs(retry_interval_secs);
+    let timeout = tokio::time::Duration::from_secs(timeout_secs);
+    let mut final_stdout: Option<String> = None;
+    let mut final_stderr: Option<String> = None;
+    let mut final_exit_code: Option<i32> = None;
+    let mut success = false;
+
+    for attempt in 0..max_retries {
+        let command_owned = command.to_string();
+        
+        let result = tokio::time::timeout(timeout, async move {
+            tokio::task::spawn_blocking(move || {
+                Command::new("sh")
+                    .arg("-c")
+                    .arg(&command_owned)
+                    .output()
+            }).await
+        }).await;
+
+        match result {
+            Ok(Ok(Ok(output))) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let exit_code = output.status.code();
+                
+                if output.status.success() {
+                    final_stdout = Some(stdout);
+                    final_stderr = Some(stderr);
+                    final_exit_code = exit_code;
+                    success = true;
+                    break;
+                }
+                final_stdout = Some(stdout);
+                final_stderr = Some(stderr);
+                final_exit_code = exit_code;
+                
+                if attempt < max_retries - 1 {
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("⚠️ 第 {} 次尝试失败，{} 秒后重试...", attempt + 1, retry_interval_secs),
+                    }));
+                    tokio::time::sleep(interval).await;
+                }
+            }
+            Ok(Ok(Err(e))) => {
+                if attempt < max_retries - 1 {
+                    tokio::time::sleep(interval).await;
+                }
+            }
+            Ok(Err(e)) => {
+                if attempt < max_retries - 1 {
+                    tokio::time::sleep(interval).await;
+                }
+            }
+            Err(_) => {
+                if attempt < max_retries - 1 {
+                    tokio::time::sleep(interval).await;
+                }
+            }
+        }
+    }
+
+    let message = if success { 
+        "命令执行成功".to_string() 
+    } else { 
+        format!("命令失败，退出码: {:?}", final_exit_code) 
+    };
+    
+    serde_json::json!({
+        "success": success,
+        "stdout": final_stdout.unwrap_or_default(),
+        "stderr": final_stderr.unwrap_or_default(),
+        "exit_code": final_exit_code,
+        "attempts": max_retries,
+        "message": message
+    })
+}
+
+fn tool_get_ollama_models() -> serde_json::Value {
+    log::info!("[Agent] 获取 Ollama 模型列表");
+
+    let ollama_bin = find_ollama_bin().unwrap_or_else(|| "ollama".to_string());
+    let ollama_dir = "/Applications/Ollama.app/Contents/Resources";
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let enhanced_path = format!("{}:{}", ollama_dir, current_path);
+
+    let output = Command::new("sh")
+        .env("PATH", &enhanced_path)
+        .arg("-c")
+        .arg(format!("{} list 2>/dev/null", ollama_bin))
+        .output();
+
+    match output {
+        Ok(o) => {
+            if !o.status.success() {
+                let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                return serde_json::json!({
+                    "success": false,
+                    "error": format!("获取模型列表失败: {}", stderr)
+                });
+            }
+
+            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            let mut models: Vec<serde_json::Value> = vec![];
+
+            for line in stdout.lines().skip(1) {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(name) = parts.first() {
+                    let size = parts.get(1).map(|s| s.to_string()).unwrap_or_default();
+                    let modified = parts.get(2).map(|s| s.to_string()).unwrap_or_default();
+                    
+                    models.push(serde_json::json!({
+                        "name": name,
+                        "size": size,
+                        "modified": modified
+                    }));
+                }
+            }
+
+            serde_json::json!({
+                "success": true,
+                "models": models,
+                "count": models.len(),
+                "raw_output": stdout
+            })
+        }
+        Err(e) => serde_json::json!({
+            "success": false,
+            "error": format!("执行命令失败: {}", e)
+        })
+    }
+}
+
 // ====== 主 Agent 命令 ======
 
 /// AI Agent 自动配置本地推理环境
@@ -389,7 +1270,7 @@ pub async fn run_ai_agent_setup(
             // 本地已有运行中的 Ollama 和模型，直接使用
             let models = check_result.get("all_models")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().ok()).collect::<Vec<_>>())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
                 .unwrap_or_default();
             let best_model = check_result.get("model_name")
                 .and_then(|v| v.as_str())
@@ -665,6 +1546,101 @@ pub async fn run_ai_agent_setup(
                     }));
 
                     return Err(format!("配置失败: {} 建议: {}", reason, suggestion));
+                }
+                "download_model" => {
+                    let source = tool_args.get("source").and_then(|v| v.as_str()).unwrap_or("ollama");
+                    let model = tool_args.get("model").and_then(|v| v.as_str()).unwrap_or("");
+                    let cache_dir = tool_args.get("cache_dir").and_then(|v| v.as_str());
+                    let timeout = tool_args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(300);
+                    
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("📥 下载模型: {} ({})", model, source),
+                    }));
+                    
+                    tool_download_model(source, model, cache_dir, timeout, &app).await
+                }
+                "start_inference_server" => {
+                    let server_type = tool_args.get("server_type").and_then(|v| v.as_str()).unwrap_or("ollama");
+                    let model = tool_args.get("model").and_then(|v| v.as_str()).unwrap_or("");
+                    let port = tool_args.get("port").and_then(|v| v.as_u64()).unwrap_or(11434) as u16;
+                    let gpu_layers = tool_args.get("gpu_layers").and_then(|v| v.as_i64()).map(|v| v as i32);
+                    let background = tool_args.get("background").and_then(|v| v.as_bool()).unwrap_or(true);
+                    
+                    tool_start_inference_server(server_type, model, port, gpu_layers, background, &app).await
+                }
+                "wait_for_condition" => {
+                    let target = tool_args.get("target").and_then(|v| v.as_str()).unwrap_or("");
+                    let target_type = tool_args.get("target_type").and_then(|v| v.as_str()).unwrap_or("http");
+                    let expected = tool_args.get("expected").and_then(|v| v.as_str()).unwrap_or("");
+                    let max_attempts = tool_args.get("max_attempts").and_then(|v| v.as_u64()).unwrap_or(30) as u32;
+                    let interval_secs = tool_args.get("interval_seconds").and_then(|v| v.as_u64()).unwrap_or(2);
+                    let timeout_secs = tool_args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(60);
+                    
+                    tool_wait_for_condition(target, target_type, expected, max_attempts, interval_secs, timeout_secs).await
+                }
+                "kill_process" => {
+                    let process_name = tool_args.get("process_name").and_then(|v| v.as_str()).unwrap_or("");
+                    let force = tool_args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+                    
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("🔪 终止进程: {}", process_name),
+                    }));
+                    
+                    tool_kill_process(process_name, force).await
+                }
+                "write_file" => {
+                    let path = tool_args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    let content = tool_args.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                    
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("📝 写文件: {}", path),
+                    }));
+                    
+                    tool_write_file(path, content).await
+                }
+                "read_file" => {
+                    let path = tool_args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("📄 读文件: {}", path),
+                    }));
+                    
+                    tool_read_file(path).await
+                }
+                "file_exists" => {
+                    let path = tool_args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    tool_file_exists(path)
+                }
+                "list_directory" => {
+                    let path = tool_args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                    let include_hidden = tool_args.get("include_hidden").and_then(|v| v.as_bool()).unwrap_or(false);
+                    
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": format!("📂 列出目录: {}", path),
+                    }));
+                    
+                    tool_list_directory(path, include_hidden).await
+                }
+                "run_command_with_retry" => {
+                    let command = tool_args.get("command").and_then(|v| v.as_str()).unwrap_or("");
+                    let max_retries = tool_args.get("max_retries").and_then(|v| v.as_u64()).unwrap_or(3) as u32;
+                    let retry_interval = tool_args.get("retry_interval_seconds").and_then(|v| v.as_u64()).unwrap_or(5);
+                    let timeout = tool_args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(30);
+                    
+                    tool_run_command_with_retry(command, max_retries, retry_interval, timeout, &app).await
+                }
+                "get_ollama_models" => {
+                    let _ = app.emit("workflow-message", serde_json::json!({
+                        "type": "progress",
+                        "content": "📦 获取 Ollama 模型列表...",
+                    }));
+                    
+                    tool_get_ollama_models()
                 }
                 _ => {
                     serde_json::json!({"error": format!("未知工具: {}", tool_name)})

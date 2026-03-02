@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
 import { ExternalApiForm, ApiList, type ExternalApiConfig } from './settings/mod';
+import { AutonomousCommandPanel } from './AutonomousCommandPanel';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -260,6 +261,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
           <Tab label="API 密钥" />
           <Tab label="外部 API" />
           <Tab label="AI 部署" />
+          <Tab label="自主命令" />
         </Tabs>
 
         {/* Tab 内容容器 - 固定高度，内部滚动 */}
@@ -572,6 +574,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
               </Box>
             </Grid>
           </Grid>
+        )}
+
+        {/* Tab 3: 自主命令面板 */}
+        {tabValue === 3 && (
+          <Box sx={{ p: 0 }}>
+            <AutonomousCommandPanel />
+          </Box>
         )}
         </Box>
       </DialogContent>

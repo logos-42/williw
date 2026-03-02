@@ -71,6 +71,10 @@ use commands::agent_commands::{
     quick_start_local_inference,
     warmup_local_model,
 };
+use commands::autonomous_commands::{
+    execute_autonomous_command,
+    execute_self_healing,
+};
 
 use tauri::Emitter;
 use tauri::Manager;
@@ -241,6 +245,8 @@ async fn main() {
             quick_start_local_inference,
             warmup_local_model,
             get_distributed_node_status,
+            execute_autonomous_command,
+            execute_self_healing,
         ])
         .setup(|app| {
             // 启动时加载持久化的外部 API 配置

@@ -97,7 +97,7 @@ pub async fn download_model_with_progress(
     }
 
     // Send request
-    let response = request_builder
+    let mut response = request_builder
         .send()
         .await
         .map_err(|e| format!("请求失败：{}", e))?;
@@ -245,8 +245,7 @@ pub async fn download_model(
     }));
 
     // Download model
-    let result = downloader.download_model(config)
-        .await
+    let result = downloader.download_model(config, |_| {}).await
         .map_err(|e| {
             let _ = app.emit("workflow-message", serde_json::json!({
                 "type": "error",

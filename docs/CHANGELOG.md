@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-03-02
+
+### Added
+
+- **Agent 模块化重构** - 遵循人月神话原则的大型重构
+  - `agent_commands.rs` 从 1809 行精简到 453 行 (-75%)
+  - 新增 `agent_tools/executors/` 模块，按功能分类工具执行器
+  - 新增 `agent/setup.rs` 辅助函数模块
+  - 新增 `agent/chat.rs` 本地聊天命令模块
+
+- **Skills 系统集成** - 全局技能管理
+  - 支持从全局 `skills/` 目录加载技能定义
+  - 内置 3 个专家技能：compute_expert, model_downloader, system_checker
+  - 支持 SKILL.md 格式规范
+
+- **Task 系统增强** - 支持 Agent Swarm 协作
+  - 新增三种执行模式：sequential, parallel, swarm
+  - Swarm 策略：Hierarchical, Broadcast, Shard, Vote
+  - 内置分布式推理、模型下载任务模板
+
+### Changed
+
+- **架构优化**
+  - 工具定义与执行逻辑分离 (`agent_tools/definitions.rs`)
+  - 统一 Skills 加载路径，使用全局 `skills/` 目录
+  - 明确 `src/agent/` (业务逻辑) 和 `src-tauri/src/commands/` (Tauri 命令层) 职责
+
+- **代码质量改进**
+  - 修复多个编译警告和临时值生命周期问题
+  - 统一导入路径和模块导出
+
+### Fixed
+
+- 修复 `agent_commands.rs` 重复定义问题
+- 修复工具执行器中的临时值生命周期错误
+- 修复模块导入路径问题
+
 ## [0.1.1] - 2026-02-13
 
 ### Fixed

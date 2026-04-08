@@ -3,7 +3,6 @@ members = [
     "model-downloader",
     "metadata-generator",
     "metadata-uploader",
-    "model-splitter",
 ]
 
 [workspace.package]

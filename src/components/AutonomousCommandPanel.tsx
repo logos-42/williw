@@ -21,8 +21,6 @@ import {
   Tooltip,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
@@ -40,8 +38,6 @@ export const AutonomousCommandPanel: React.FC = () => {
     result,
     isLoading,
     error,
-    startOllama,
-    stopOllama,
     checkService,
     diagnoseNetwork,
     runSelfHealing,
@@ -51,15 +47,6 @@ export const AutonomousCommandPanel: React.FC = () => {
 
   const handleQuickAction = (action: string) => {
     switch (action) {
-      case 'start-ollama':
-        startOllama();
-        break;
-      case 'stop-ollama':
-        stopOllama();
-        break;
-      case 'check-ollama':
-        checkService('ollama');
-        break;
       case 'self-heal':
         runSelfHealing();
         break;
@@ -91,57 +78,11 @@ export const AutonomousCommandPanel: React.FC = () => {
 
       {/* 快捷操作按钮 */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 6, sm: 'auto' }}>
-          <Tooltip title="启动 Ollama 服务">
-            <Button
-              variant="contained"
-              startIcon={isLoading ? <CircularProgress size={16} /> : <PlayArrowIcon />}
-              onClick={() => handleQuickAction('start-ollama')}
-              disabled={isLoading}
-              fullWidth
-              sx={{ minWidth: 120 }}
-            >
-              启动 Ollama
-            </Button>
-          </Tooltip>
-        </Grid>
-
-        <Grid size={{ xs: 6, sm: 'auto' }}>
-          <Tooltip title="停止 Ollama 服务">
-            <Button
-              variant="outlined"
-              startIcon={<StopIcon />}
-              onClick={() => handleQuickAction('stop-ollama')}
-              disabled={isLoading}
-              color="warning"
-              fullWidth
-              sx={{ minWidth: 120 }}
-            >
-              停止 Ollama
-            </Button>
-          </Tooltip>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 'auto' }}>
-          <Tooltip title="检查 Ollama 状态">
-            <Button
-              variant="outlined"
-              startIcon={<CheckCircleIcon />}
-              onClick={() => handleQuickAction('check-ollama')}
-              disabled={isLoading}
-              fullWidth
-              sx={{ minWidth: 120 }}
-            >
-              检查状态
-            </Button>
-          </Tooltip>
-        </Grid>
-
         <Grid size={{ xs: 12, sm: 'auto' }}>
           <Tooltip title="执行自愈流程">
             <Button
               variant="contained"
-              startIcon={<AutoFixHighIcon />}
+              startIcon={isLoading ? <CircularProgress size={16} /> : <AutoFixHighIcon />}
               onClick={() => handleQuickAction('self-heal')}
               disabled={isLoading}
               color="info"

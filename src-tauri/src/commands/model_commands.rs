@@ -7,7 +7,6 @@ use std::time::Instant;
 
 // Import model downloader (via Cargo.toml dependency)
 use model_downloader::{ModelDownloader, DownloadConfig, DownloadResult};
-use model_splitter::{ModelSplitter, SplitConfig, SplitPlan};
 
 // Import progress event
 use crate::events::ModelDownloadProgress;

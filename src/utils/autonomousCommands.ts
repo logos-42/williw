@@ -9,8 +9,6 @@ export interface AutonomousCommandResult {
 }
 
 export type AutonomousCommandType =
-  | { type: 'StartOllama'; gpu_limit?: number }
-  | { type: 'StopOllama' }
   | { type: 'CheckService'; service_name: string }
   | { type: 'KillProcess'; process_name: string }
   | { type: 'CheckDiskSpace'; path?: string }
@@ -31,14 +29,6 @@ export async function executeAutonomousCommand(
   // 将前端命令类型转换为 Rust 枚举格式
   const rustCommand = (() => {
     switch (command.type) {
-      case 'StartOllama':
-        return {
-          StartOllama: { gpu_limit: command.gpu_limit }
-        };
-      case 'StopOllama':
-        return {
-          StopOllama: {}
-        };
       case 'CheckService':
         return {
           CheckService: { service_name: command.service_name }
@@ -85,27 +75,13 @@ export async function executeAutonomousCommand(
 
 /**
  * 执行自愈流程
- * 
+ *
  * 自动检测并修复常见问题：
- * - Ollama 服务未运行 → 自动启动
+ * - 服务未运行 → 自动启动
  * - 进程卡死 → 自动清理
  */
 export async function executeSelfHealing(): Promise<any> {
   return await invoke('execute_self_healing');
-}
-
-/**
- * 快捷命令：启动 Ollama
- */
-export async function startOllama(gpuLimit?: number): Promise<AutonomousCommandResult> {
-  return executeAutonomousCommand({ type: 'StartOllama', gpu_limit: gpuLimit });
-}
-
-/**
- * 快捷命令：停止 Ollama
- */
-export async function stopOllama(): Promise<AutonomousCommandResult> {
-  return executeAutonomousCommand({ type: 'StopOllama' });
 }
 
 /**

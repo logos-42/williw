@@ -16,7 +16,6 @@ use crate::state::AppState;
 use crate::commands::agent_tools::definitions;
 use crate::commands::agent_tools::executors::{system, shell, http, filesystem, network, model};
 use crate::commands::agent::setup::{self, parse_llm_response};
-use crate::commands::agent::chat::quick_start_local_inference;
 use tauri::{State, Emitter};
 use serde_json;
 
@@ -35,45 +34,6 @@ pub async fn run_ai_agent_setup(
 ) -> Result<serde_json::Value, String> {
     use reqwest;
 
-    // ====== 优化：优先检查本地 Ollama 是否已有可用模型 ======
-    let _ = app.emit("workflow-message", serde_json::json!({
-        "type": "info",
-        "content": "🔍 检查本地 Ollama 状态...",
-    }));
-
-    // 快速检测本地 Ollama
-    let local_check = quick_start_local_inference().await;
-    if let Ok(check_result) = local_check {
-        if check_result.get("found").and_then(|v| v.as_bool()).unwrap_or(false)
-            && check_result.get("has_models").and_then(|v| v.as_bool()).unwrap_or(false) {
-            let models = check_result.get("all_models")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-                .unwrap_or_default();
-            let best_model = check_result.get("model_name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("qwen2.5:1.5b");
-            let endpoint = check_result.get("inference_endpoint")
-                .and_then(|v| v.as_str())
-                .unwrap_or("http://localhost:11434/v1");
-
-            let _ = app.emit("workflow-message", serde_json::json!({
-                "type": "success",
-                "content": format!("✅ 发现本地已有可用的 Ollama 推理服务！\n\n已安装模型：{}\n自动选择：{}\n端点：{}\n\n直接使用现有模型，无需重新配置 👇", models.join(", "), best_model, endpoint),
-            }));
-
-            return Ok(serde_json::json!({
-                "success": true,
-                "inference_endpoint": endpoint,
-                "model_name": best_model,
-                "summary": format!("使用本地已有模型：{}（共 {} 个模型）", best_model, models.len()),
-                "using_local_model": true,
-                "local_existing": true,
-            }));
-        }
-    }
-
-    // ====== 本地没有可用模型，继续 AI 代理流程 ======
     let api_config = {
         let apis = state.external_apis.lock();
         apis.iter()
@@ -84,7 +44,7 @@ pub async fn run_ai_agent_setup(
 
     let _ = app.emit("workflow-message", serde_json::json!({
         "type": "info",
-        "content": format!("🤖 AI 代理启动\n\n本地未检测到可用模型，将自动配置...\n\n用户请求运行：{}", user_model_hint),
+        "content": format!("🤖 AI 代理启动\n\n自动配置本地推理服务...\n\n用户请求运行：{}", user_model_hint),
     }));
 
     let client = reqwest::Client::builder()
@@ -104,20 +64,13 @@ pub async fn run_ai_agent_setup(
         你需要：\n\
         1. 分析系统信息，了解机器能力\n\
         2. 选择最适合该硬件的模型（要保证能跑起来）\n\
-        3. 安装必要的软件（推荐使用 Ollama，因为它最简单可靠）\n\
+        3. 安装必要的软件（推荐使用 llama.cpp 或其他开源推理框架）\n\
         4. 拉取并启动模型\n\
         5. 验证服务正常运行后调用 finish_setup\n\
         \n\
         重要原则：\n\
-        - 优先使用 Ollama（最简单，支持 macOS Metal/GPU，API 兼容 OpenAI）\n\
-        - macOS 上 Ollama 安装：curl -fsSL https://ollama.com/install.sh | sh\n\
-        - 或者：brew install ollama\n\
-        - 根据 RAM 选择模型：4-8GB 选 qwen2.5:0.5b，8-16GB 选 qwen2.5:1.5b，16GB+ 选 qwen2.5:3b 或 llama3.2:3b\n\
-        - 如果 check_system 结果中有 ollama_bin_path 字段，说明 Ollama 已安装但不在 PATH 中；\n\
-          此时所有 ollama 命令请使用该完整路径，例如 '<ollama_bin_path> pull qwen2.5:1.5b'\n\
-          或者使用 'PATH=<ollama_dir>:$PATH ollama pull ...' 的方式\n\
-        - 如果 ollama_models 字段已有模型，必须立即使用现有模型，直接调用 finish_setup！
-          不要重新拉取任何模型！不要执行任何安装命令！\n\
+        - 根据 RAM 选择模型：4-8GB 选小参数模型（<1B），8-16GB 选中等模型（1-3B），16GB+ 可选较大模型（3-7B）\n\
+        - 优先使用 HuggingFace 下载开源模型\n\
         - 如果机器确实不适合运行任何模型，调用 report_failure\n\
         - 每次只调用一个工具，等待结果后再决定下一步\n\
         - 用中文解释你的每个决定",
@@ -148,7 +101,7 @@ pub async fn run_ai_agent_setup(
         }),
         serde_json::json!({
             "role": "user",
-            "content": format!("请开始配置本地推理环境。\n\n【关键】如果系统已有 ollama 模型，直接使用现有模型并调用 finish_setup，不要重新安装或下载任何模型！\n\n用户期望：{}", user_model_hint)
+            "content": format!("请开始配置本地推理环境。\n\n用户期望：{}", user_model_hint)
         })
     ];
 
@@ -401,14 +354,6 @@ pub async fn run_ai_agent_setup(
                     let timeout = tool_args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(30);
 
                     shell::run_command_with_retry(command, max_retries, retry_interval, timeout, &app).await
-                }
-                "get_ollama_models" => {
-                    let _ = app.emit("workflow-message", serde_json::json!({
-                        "type": "progress",
-                        "content": "📦 获取 Ollama 模型列表...",
-                    }));
-
-                    model::get_ollama_models()
                 }
                 _ => {
                     serde_json::json!({"error": format!("未知工具：{}", tool_name)})

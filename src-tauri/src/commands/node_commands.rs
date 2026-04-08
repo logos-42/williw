@@ -94,7 +94,7 @@ pub fn get_connected_peers(
 }
 
 /// 获取本节点的去中心化算力状态（用于分布式推理面板展示）
-/// 返回：P2P节点状态、本地Ollama状态、硬件能力、可承担的层数估算
+/// 返回：P2P节点状态、硬件能力、可承担的层数估算
 #[tauri::command]
 pub async fn get_distributed_node_status(
     state: State<'_, AppState>,
@@ -143,62 +143,13 @@ pub async fn get_distributed_node_status(
     let arch = std::env::consts::ARCH;
     let is_apple_silicon = arch == "aarch64";
 
-    // 3. 本地 Ollama 状态
-    let ollama_paths = [
-        "/Applications/Ollama.app/Contents/Resources/ollama",
-        "/usr/local/bin/ollama",
-        "/opt/homebrew/bin/ollama",
-    ];
-    let ollama_bin = Command::new("sh")
-        .arg("-c")
-        .arg("command -v ollama 2>/dev/null")
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
-        .or_else(|| ollama_paths.iter().find(|p| std::path::Path::new(p).exists()).map(|s| s.to_string()));
-
-    let ollama_installed = ollama_bin.is_some();
-
-    // 检查 Ollama 是否在运行（快速 HTTP 检查）
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-        .unwrap_or_default();
-    let ollama_running = client.get("http://localhost:11434").send().await.is_ok();
-
-    // 获取已安装模型列表
-    let ollama_models: Vec<String> = if ollama_running {
-        if let Some(bin) = &ollama_bin {
-            Command::new("sh")
-                .arg("-c")
-                .arg(format!("{} list 2>/dev/null", bin))
-                .output()
-                .ok()
-                .map(|o| {
-                    String::from_utf8_lossy(&o.stdout)
-                        .lines()
-                        .skip(1)
-                        .filter_map(|l| l.split_whitespace().next().map(|s| s.to_string()))
-                        .filter(|s| !s.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default()
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
-    };
-
-    // 4. 估算本节点可承担的最大层数
+    // 3. 估算本节点可承担的最大层数
     // 粗算：1B 参数 ≈ 2GB RAM（fp16），1GB RAM ≈ 可承担约 2 层（7B 28层÷14GB）
     let usable_ram_gb = ram_gb.saturating_sub(4); // 预留 4GB 给系统
     let max_layers_estimate = (usable_ram_gb * 2).min(80) as u32; // 最多 80 层（72B）
 
-    // 5. 推荐本节点承担的任务
-    let recommended_role = if ram_gb >= 16 && ollama_running && !ollama_models.is_empty() {
+    // 4. 推荐本节点承担的任务
+    let recommended_role = if ram_gb >= 16 {
         "inference_primary"   // 可独立推理 1.5B-7B 模型
     } else if ram_gb >= 8 {
         "inference_shard"     // 可承担部分模型层（分布式）
@@ -215,18 +166,10 @@ pub async fn get_distributed_node_status(
             "is_apple_silicon": is_apple_silicon,
             "max_layers_estimate": max_layers_estimate,
         },
-        "ollama": {
-            "installed": ollama_installed,
-            "running": ollama_running,
-            "models": ollama_models,
-            "model_count": ollama_models.len(),
-        },
         "compute": {
             "recommended_role": recommended_role,
-            "can_run_local_inference": ollama_running && !ollama_models.is_empty(),
             "can_participate_distributed": ram_gb >= 4,
             "usable_ram_gb": usable_ram_gb,
         },
-        "endpoint": if ollama_running { Some("http://localhost:11434/v1") } else { None },
     }))
 }

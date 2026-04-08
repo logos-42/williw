@@ -34,7 +34,6 @@ subtle = "2.5"
 model-downloader = { path = "src/models/model_downloader" }
 metadata-generator = { path = "src/models/metadata_generator" }
 metadata-uploader = { path = "src/models/metadata_uploader" }
-model-splitter = { path = "src/models/model_splitter" }
 
 # HTTP client for model operations
 reqwest = { version = "0.13", features = ["json"] }

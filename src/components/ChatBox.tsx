@@ -209,17 +209,12 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ expanded = false, onExpand }) 
         if (errStr.includes('502') || errStr.includes('Bad Gateway')) {
           errorContent =
             '⚠️ 本地模型加载失败（502 Bad Gateway）\n\n可能原因：\n' +
-            '• Ollama 正在加载模型（首次需要 5-10 秒）\n' +
-            '• Intel Mac MLX GPU 不兼容\n\n' +
-            '解决方法（在终端运行）：\n' +
-            '  pkill ollama\n' +
-            '  OLLAMA_NUM_GPU=0 /Applications/Ollama.app/Contents/Resources/ollama serve &\n\n' +
-            '重启后再次发送消息即可。';
+            '• 推理服务正在加载模型（首次需要 5-10 秒）\n\n' +
+            '请等待片刻后再次发送消息。';
         } else if (errStr.includes('Connection refused') || errStr.includes('请求失败')) {
           errorContent =
             '⚠️ 无法连接到本地推理服务\n\n' +
-            'Ollama 可能已停止运行。请在终端运行：\n' +
-            '  OLLAMA_NUM_GPU=0 /Applications/Ollama.app/Contents/Resources/ollama serve &';
+            '推理服务可能已停止运行。请重新启动。';
         } else {
           errorContent = `本地推理出错：${errStr}\n\n端点: ${activeSession.inferenceEndpoint}\n模型: ${activeSession.localModelName ?? activeSession.modelName}`;
         }

@@ -6,7 +6,7 @@ use std::process::Command;
 use serde_json;
 use tauri::Emitter;
 
-/// Download AI models from Ollama or HuggingFace.
+/// Download AI models from HuggingFace or other sources.
 pub async fn download_model(
     source: &str,
     model: &str,
@@ -22,69 +22,6 @@ pub async fn download_model(
     }));
 
     match source {
-        "ollama" => {
-            let ollama_bin = find_ollama_bin().unwrap_or_else(|| "ollama".to_string());
-            let command = format!("{} pull {}", ollama_bin, model);
-
-            let _ = app.emit("workflow-message", serde_json::json!({
-                "type": "progress",
-                "content": format!("🔧 执行命令：{}", command),
-            }));
-
-            let timeout = tokio::time::Duration::from_secs(timeout_secs);
-            let command_owned = command.clone();
-
-            let result = tokio::time::timeout(timeout, async move {
-                tokio::task::spawn_blocking(move || {
-                    Command::new("sh")
-                        .arg("-c")
-                        .arg(&command_owned)
-                        .output()
-                }).await
-            }).await;
-
-            match result {
-                Ok(Ok(Ok(output))) => {
-                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    let success = output.status.success();
-
-                    if success {
-                        let _ = app.emit("workflow-message", serde_json::json!({
-                            "type": "success",
-                            "content": format!("✅ 模型下载成功：{}", model),
-                        }));
-                    }
-
-                    serde_json::json!({
-                        "success": success,
-                        "source": source,
-                        "model": model,
-                        "stdout": stdout,
-                        "stderr": stderr,
-                        "message": if success { format!("模型 {} 下载成功", model) } else { format!("下载失败：{}", stderr) }
-                    })
-                }
-                Ok(Ok(Err(e))) => serde_json::json!({
-                    "success": false,
-                    "source": source,
-                    "model": model,
-                    "error": format!("执行错误：{}", e)
-                }),
-                Ok(Err(e)) => serde_json::json!({
-                    "success": false,
-                    "source": source,
-                    "model": model,
-                    "error": format!("任务错误：{}", e)
-                }),
-                Err(_) => serde_json::json!({
-                    "success": false,
-                    "source": source,
-                    "model": model,
-                    "error": format!("下载超时（{}秒）", timeout_secs)
-                })
-            }
-        }
         "huggingface" => {
             let cache_arg = cache_dir.map(|d| format!("--cache-dir {}", d)).unwrap_or_default();
             let command = format!("python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('{}' {})\"", model, cache_arg);

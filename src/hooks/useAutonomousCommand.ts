@@ -11,8 +11,6 @@ interface UseAutonomousCommandReturn {
   isLoading: boolean;
   error: string | null;
   executeCommand: (command: AutonomousCommandType, requireConfirmation?: boolean) => Promise<void>;
-  startOllama: (gpuLimit?: number) => Promise<void>;
-  stopOllama: () => Promise<void>;
   checkService: (serviceName: string) => Promise<void>;
   diagnoseNetwork: (target: string) => Promise<void>;
   runSelfHealing: () => Promise<void>;
@@ -36,36 +34,6 @@ export function useAutonomousCommand(): UseAutonomousCommandReturn {
 
     try {
       const cmdResult = await executeAutonomousCommand(command, requireConfirmation);
-      setResult(cmdResult);
-    } catch (err: any) {
-      setError(err.message || String(err));
-      setResult(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const startOllama = useCallback(async (gpuLimit?: number) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const cmdResult = await executeAutonomousCommand({ type: 'StartOllama', gpu_limit: gpuLimit });
-      setResult(cmdResult);
-    } catch (err: any) {
-      setError(err.message || String(err));
-      setResult(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const stopOllama = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const cmdResult = await executeAutonomousCommand({ type: 'StopOllama' });
       setResult(cmdResult);
     } catch (err: any) {
       setError(err.message || String(err));
@@ -130,8 +98,6 @@ export function useAutonomousCommand(): UseAutonomousCommandReturn {
     isLoading,
     error,
     executeCommand,
-    startOllama,
-    stopOllama,
     checkService,
     diagnoseNetwork,
     runSelfHealing,

@@ -50,7 +50,6 @@ tags: [system, hardware, software, check]
 | Python | `python3 --version` | 3.8 |
 | Node.js | `node --version` | 16.0 |
 | Docker | `docker --version` | 20.0 |
-| Ollama | `ollama --version` | 0.1.0 |
 | Git | `git --version` | 2.0 |
 
 ## 网络检测
@@ -74,8 +73,7 @@ tags: [system, hardware, software, check]
     "gpu": {"available": true, "model": "Apple M1 GPU", "memory": "8GB"}
   },
   "software": {
-    "python": {"installed": true, "version": "3.11.0"},
-    "ollama": {"installed": true, "version": "0.1.0"}
+    "python": {"installed": true, "version": "3.11.0"}
   },
   "recommendations": [
     "推荐模型: qwen2.5:1.5b (内存充足)"

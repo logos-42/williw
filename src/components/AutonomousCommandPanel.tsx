@@ -21,7 +21,6 @@ import {
   Tooltip,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
@@ -38,7 +37,6 @@ export const AutonomousCommandPanel: React.FC = () => {
     result,
     isLoading,
     error,
-    checkService,
     diagnoseNetwork,
     runSelfHealing,
     executeCommand,

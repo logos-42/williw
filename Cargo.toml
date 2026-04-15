@@ -3,6 +3,14 @@ name = "williw"
 version = "0.1.1-alpha.1"
 edition = "2021"
 
+[workspace]
+members = [
+    "src/hyperagent",
+    "src/models/model_downloader",
+    "src/models/metadata_generator",
+    "src/models/metadata_uploader",
+]
+
 [dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "time", "sync"] }
 iroh = { version = "0.95", features = ["discovery-local-network"] }
@@ -34,6 +42,9 @@ subtle = "2.5"
 model-downloader = { path = "src/models/model_downloader" }
 metadata-generator = { path = "src/models/metadata_generator" }
 metadata-uploader = { path = "src/models/metadata_uploader" }
+
+# Hyperagent: Self-evolving AI agent system
+hyperagent = { path = "src/hyperagent" }
 
 # HTTP client for model operations
 reqwest = { version = "0.13", features = ["json"] }

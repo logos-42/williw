@@ -1,0 +1,5 @@
+target/
+.omx/
+.clawd-agents/
+
+*.env
